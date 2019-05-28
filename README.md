@@ -22,7 +22,7 @@ When developing this app, 4 main things were my target:
 
 To maximise the app, it will be advisable to setup the system in the home as follows:
 - Use Appdaemon >= 4.0 (of course :roll_eyes:)
-- Try make use of the Appdaemon MQTT plugin. 
+- Make use of the Appdaemon MQTT plugin. 
 - Have a single main sensor, which runs as monitor.sh in a location that users stay more often as in @andrewjfreyer example setup. If having more than 1 sensor, have the rest run as monitor.sh -t so they only scan on trigger. The main one triggers the rest and and the app does that also when need be
 - In the main sensor, have good spacing between scans, not only to avoid unnecessarily flooding your environment with scans but also allowing the app to take over scans intermittently. I have mine set at 120 secs throughout for now
 

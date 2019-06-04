@@ -33,6 +33,6 @@ To maximise the app, it will be advisable to setup the system in the home as fol
 
 - Use Appdaemon >= 4.0 (of course :roll_eyes:)
 - Make use of the Appdaemon MQTT plugin. 
-- Have a single main sensor, which runs as monitor.sh in a location that users stay more often as in @andrewjfreyer example setup. If having more than 1 sensor, have the rest run as monitor.sh -t so they only scan on trigger. The main one triggers the rest and and the app does that also when need be
+- Have a single main sensor, which runs as `monitor.sh -tdr -a -b` in a location that users stay more often in line with @andrewjfreyer example setup. If having more than 1 sensor, have the rest run as `monitor.sh -tadr -a -b` so they only scan on trigger for both arrival and departutre.
 - In the main sensor, have good spacing between scans, not only to avoid unnecessarily flooding your environment with scans but also allowing the app to take over scans intermittently. I have mine set at 120 secs throughout for now
 - Have sensors at the entrances into the home which I termed `gateways`, whether it be doors or garages. Windows also for those that use it :wink:

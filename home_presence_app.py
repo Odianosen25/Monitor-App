@@ -18,6 +18,7 @@ class HomePresenceApp(mqtt.Mqtt):
         self.not_home_timers = dict()
         self.location_timers = dict()
         self.home_state_entities = dict() #used to store or map different confidence sensors based on location to devices
+        self.system_handle = dict()
 
         self.monitor_entity = '{}.monitor_state'.format(self.presence_topic) #used to check if the network monitor is busy 
         if not self.entity_exists(self.monitor_entity):
@@ -87,6 +88,10 @@ class HomePresenceApp(mqtt.Mqtt):
                 attributes.update({"friendly_name" : location})
 
             self.set_state(entity_id, state = payload.title(), attributes = attributes)
+
+            if self.system_handle.get(entity_id, None) == None:
+                self.system_handle[entity_id] = self.listen_state(self.system_state_changed, entity_id, old = "Offline", new = "Online")
+
             return
         
         elif topic.split('/')[-1] == 'restart': #meaning its a message is a restart
@@ -332,8 +337,9 @@ class HomePresenceApp(mqtt.Mqtt):
                 self.update_sensor("binary_sensor.everyone_not_home_state", "on")
     
     def reload_device_state(self, event_name, data, kwargs):
-        topic = "{}/KNOWN DEVICE STATES".format(self.presence_topic) #get latest states
-        self.run_in(self.send_mqtt_message, 0, topic=topic, payload="", scan_type="System")
+        self.restart_device({})
+        #topic = "{}/KNOWN DEVICE STATES".format(self.presence_topic) #get latest states
+        #self.run_in(self.send_mqtt_message, 0, topic=topic, payload="", scan_type="System")
 
     def monitor_changed_state(self, entity, attribute, old, new, kwargs):
         scan = kwargs['scan']
@@ -396,3 +402,6 @@ class HomePresenceApp(mqtt.Mqtt):
 
         entity_id = "{}.{}".format(self.presence_topic, siteId)
         self.set_state(entity_id, state = "Offline")
+
+    def system_state_changed(self, entity, attribute, old, new, kwargs):
+        self.reload_device_state(None, None, {})

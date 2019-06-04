@@ -1,6 +1,5 @@
 import mqttapi as mqtt
 import json
-import shelve
 import datetime
 
 class HomePresenceApp(mqtt.Mqtt): 

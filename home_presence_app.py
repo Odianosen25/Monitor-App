@@ -27,19 +27,26 @@ class HomePresenceApp(mqtt.Mqtt):
         self.monitor_handlers = dict() #used to store different handlers
         self.monitor_handlers[self.monitor_entity] = None
 
-        everyone_not_home_state = "binary_sensor.everyone_not_home_state"
-        everyone_home_state = "binary_sensor.everyone_home_state"
+        self.everyone_not_home_state = "binary_sensor.everyone_not_home_state"
+        self.everyone_home_state = "binary_sensor.everyone_home_state"
+        self.somebody_is_home_state = "binary_sensor.somebody_is_home_state"
+
         self.gateway_timer = None #run only a single timer at a time, to avoid sending multiple messages to the monitor
 
-        if not self.hass.entity_exists(everyone_not_home_state): #check if the sensor exist and if not create it
+        if not self.hass.entity_exists(self.everyone_not_home_state): #check if the sensor exist and if not create it
             self.log('Creating Binary Sensor for Everyone Not Home State')
             attributes = {"friendly_name": "Everyone Not Home State", "device_class" : "presence"}
-            self.hass.set_state(everyone_not_home_state, state = "off", attributes = attributes) #send to homeassistant to create binary sensor sensor for home state
+            self.hass.set_state(self.everyone_not_home_state, state = "off", attributes = attributes) #send to homeassistant to create binary sensor sensor for home state
 
-        if not self.hass.entity_exists(everyone_home_state): #check if the sensor exist and if not create it
+        if not self.hass.entity_exists(self.everyone_home_state): #check if the sensor exist and if not create it
             self.log('Creating Binary Sensor for Everyone Home State')
             attributes = {"friendly_name": "Everyone Home State", "device_class" : "presence"}
-            self.hass.set_state(everyone_home_state, state = "off", attributes = attributes) #send to homeassistant to create binary sensor sensor for home state
+            self.hass.set_state(self.everyone_home_state, state = "off", attributes = attributes) #send to homeassistant to create binary sensor sensor for home state
+
+        if not self.hass.entity_exists(self.somebody_is_home_state): #check if the sensor exist and if not create it
+            self.log('Creating Binary Sensor for Somebody is Home State')
+            attributes = {"friendly_name": "Somebody is Home State", "device_class" : "presence"}
+            self.hass.set_state(self.somebody_is_home_state, state = "off", attributes = attributes) #send to homeassistant to create binary sensor sensor for home state
 
         '''setup home gateway sensors'''
         for gateway_sensor in self.args['home_gateway_sensors']:
@@ -231,8 +238,12 @@ class HomePresenceApp(mqtt.Mqtt):
 
                 self.update_sensor(user_device_sensor, "on")
 
+                if self.hass.get_state(self.somebody_is_home_state, copy=False) == "off":
+                    self.update_sensor(self.somebody_is_home_state, "on") #somebody is home
+
                 if user_device_sensor in self.all_users_sensors: #check if everyone home
-                    self.update_sensor("binary_sensor.everyone_not_home_state", "off")
+                    if self.hass.get_state(self.everyone_not_home_state, copy=False) == "on":
+                        self.update_sensor(self.everyone_not_home_state, "off")
                     
                     self.run_in(self.check_home_state, 2, check_state = 'is_home')
 
@@ -256,7 +267,7 @@ class HomePresenceApp(mqtt.Mqtt):
 
             if user_device_sensor in self.all_users_sensors: #check if everyone not home
                 '''since at least someone not home, set to off the everyone home state'''
-                self.update_sensor("binary_sensor.everyone_home_state", "off")
+                self.update_sensor(self.everyone_home_state, "off")
 
                 self.run_in(self.check_home_state, 2, check_state = 'not_home')
 
@@ -297,17 +308,15 @@ class HomePresenceApp(mqtt.Mqtt):
     def gateway_opened(self, entity, attribute, old, new, kwargs):
         '''one of the gateways was opened and so needs to check what happened'''
         self.log("Gateway Sensor " + new)
-        everyone_not_home_state = 'binary_sensor.everyone_not_home_state'
-        everyone_home_state = 'binary_sensor.everyone_home_state'
 
         if self.gateway_timer != None: #meaning a timer is running already
             self.cancel_timer(self.gateway_timer)
             self.gateway_timer = None
 
-        if self.hass.get_state(everyone_not_home_state) == 'on': #meaning no one at home
+        if self.hass.get_state(self.everyone_not_home_state) == 'on': #meaning no one at home
             self.run_arrive_scan()
 
-        elif self.hass.get_state(everyone_home_state) == 'on': #meaning everyone at home
+        elif self.hass.get_state(self.everyone_home_state) == 'on': #meaning everyone at home
             self.run_depart_scan()
             #self.run_depart_scan(delay = 90)
 
@@ -325,7 +334,11 @@ class HomePresenceApp(mqtt.Mqtt):
             user_res = [i for i in user_res if i != None] # remove None vales from list
 
             if all(list(map(lambda x: x == 'on', user_res))): #meaning every one is home
-                self.update_sensor("binary_sensor.everyone_home_state", "on")
+                self.update_sensor(self.everyone_home_state, "on")
+            
+            elif any(list(map(lambda x: x == 'on', user_res))): #meaning at least someone is home
+                if self.hass.get_state(self.somebody_is_home_state, copy=False) == "off":
+                    self.update_sensor(self.somebody_is_home_state, "on") #somebody is home
                 
         elif check_state == 'not_home':
             ''' now run to check if everyone is not home since a user is not home'''
@@ -334,7 +347,13 @@ class HomePresenceApp(mqtt.Mqtt):
             user_res = [i for i in user_res if i != None] # remove None vales from list
 
             if all(list(map(lambda x: x == 'off', user_res))): #meaning no one is home
-                self.update_sensor("binary_sensor.everyone_not_home_state", "on")
+                self.update_sensor(self.everyone_not_home_state, "on")
+
+                if self.hass.get_state(self.somebody_is_home_state, copy=False) == "on":
+                    self.update_sensor(self.somebody_is_home_state, "off") #somebody is home
+            else:
+                if self.hass.get_state(self.somebody_is_home_state, copy=False) == "off":
+                    self.update_sensor(self.somebody_is_home_state, "on") #somebody is home
     
     def reload_device_state(self, event_name, data, kwargs):
         self.restart_device({})

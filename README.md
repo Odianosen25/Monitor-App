@@ -12,10 +12,16 @@ How to setup the monitor (not presence) system can be seen in the link above, an
 - If a device is seen to be below the configured minimum confidence minimum_confidence level across all locations which defaults to 90,   a configurable not_home_timeout is ran before declaring the user device is not home in HA using the binary sensor generated for that     device.
 - When one of the declared gateway_sensors in the apps.yaml is opened, based on who is in the house it will send a scan instruction to     the monitor system.
 - Before sending the scan instruction, it first checks for if the system is busy scanning. With the new upgrade to the script, this is     not really needed. But if the user was to activate `PREF_MQTT_REPORT_SCAN_MESSAGES` to `true` in prefs, it can still use it
-    
-The app also generates entities within AD, which has all the data published by the script, and can be listened to in other Apps for other automation reasons. For example `rssi` readings based on devices.
+
+Added to the above, the App does the following:
+-----------------------------------------------
+
+- Generates entities within AD, which has all the data published by the script per device, and can be listened to in other Apps for other automation reasons. For example `rssi` readings based on devices.
+- Constantly checks for all installed scripts on the network, to ensure which is online. If any location doesn't respond after a set time, it sets all entities generated from that location to `0`.
+- Requests all devices update from the scripts on the network on a system restart
 
 When developing this app, 4 main things were my target:
+-------------------------------------------------------
 
 - Ease of use: The user should only setup the monitor system/s, and no matter the number of locations involved, it should be up and running without virtually any or minimal extra work needed. The idea of editing the configuration.yaml file for sensors, automation and input_boolean as in the example to use this great system was almost a put off for me. And once one’s system grows, it exponentially takes more work to setup and debug :persevere:.
 - Scalability: No matter the number of users or gateways or monitor systems in place, whether its small like mine which is 3, 1 & 2 respectively or you have 30, 10 and 20 respectively (if possible), it should take virtually the same amount of work to be up and running when using this app :smirk:
@@ -23,9 +29,10 @@ When developing this app, 4 main things were my target:
 - Lastly and most especially Reliability: It was important false positives/negatives are eliminated in the way the system runs. So the app tries to build in some little time based buffers here and there :grimacing:
 
 To maximise the app, it will be advisable to setup the system in the home as follows:
+-------------------------------------------------------------------------------------
+
 - Use Appdaemon >= 4.0 (of course :roll_eyes:)
 - Make use of the Appdaemon MQTT plugin. 
 - Have a single main sensor, which runs as monitor.sh in a location that users stay more often as in @andrewjfreyer example setup. If having more than 1 sensor, have the rest run as monitor.sh -t so they only scan on trigger. The main one triggers the rest and and the app does that also when need be
 - In the main sensor, have good spacing between scans, not only to avoid unnecessarily flooding your environment with scans but also allowing the app to take over scans intermittently. I have mine set at 120 secs throughout for now
-
-Have sensors at the entrances into the home which I termed gateways, whether it be doors or garages. Windows also for those that use it :wink:
+- Have sensors at the entrances into the home which I termed `gateways`, whether it be doors or garages. Windows also for those that use it :wink:

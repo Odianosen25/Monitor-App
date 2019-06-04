@@ -17,7 +17,7 @@ Added to the above, the App does the following:
 -----------------------------------------------
 
 - Generates entities within AD, which has all the data published by the script per device, and can be listened to in other Apps for other automation reasons. For example `rssi` readings based on devices.
-- Constantly checks for all installed scripts on the network, to ensure which is online. If any location doesn't respond after a set time, it sets all entities generated from that location to `0`.
+- Constantly checks for all installed scripts on the network, to ensure which is online. If any location doesn't respond after a set time `system_timeout`, it sets all entities generated from that location to `0`.
 - Requests all devices update from the scripts on the network on a system restart
 
 When developing this app, 4 main things were my target:

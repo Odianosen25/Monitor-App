@@ -5,13 +5,15 @@ This app can be added to an Appdaemon system, which will help to auto generate e
 
 How to setup the monitor (not presence) system can be seen in the link above, and what this app does is simply to make it easy to integrate it into HA and AD. This is based of Appdaemon 4.0 and above, so it will only profit those that use it. This app does the following:
 
-- Generates sensors for the following
+- Generates sensors in HA for the following
     - Sensors of the Confidence levels for each device based on each location. So if you have 3 presence systems, each known device will       have 3 confidence sensors with the names sensor.<device name>_location in both HA and AD.
     - Binary Sensors for each device. So no matter the number of location sensors you have, only one is generated and this is a presence       sensor. The sensor entity_id will be binary_sensor.<device name>_home_state. So if one has an entry in the known_static_address as       xx:xx:xx:xx:xx:xx odianosen's iphone it will generate `binary_sensor.odianosens_iphone_s_home_state`
     - Binary sensors for when everyone is in binary_sensor.everyone_home and when everyone is out binary_sensor.everyone_not_home. These       sensors are set to ON or OFF when all declared users in the apps.yaml file users_sensors are in or out. If some are in and some         out, both will be OFF. This is handy for other automation rules.
 - If a device is seen to be below the configured minimum confidence minimum_confidence level across all locations which defaults to 90,   a configurable not_home_timeout is ran before declaring the user device is not home in HA using the binary sensor generated for that     device.
 - When one of the declared gateway_sensors in the apps.yaml is opened, based on who is in the house it will send a scan instruction to     the monitor system.
 - Before sending the scan instruction, it first checks for if the system is busy scanning. With the new upgrade to the script, this is     not really needed. But if the user was to activate `PREF_MQTT_REPORT_SCAN_MESSAGES` to `true` in prefs, it can still use it
+    
+The app also generates entities within AD, which has all the data published by the script, and can be listened to in other Apps for other automation reasons. For example `rssi` readings based on devices.
 
 When developing this app, 4 main things were my target:
 

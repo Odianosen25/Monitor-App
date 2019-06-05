@@ -196,6 +196,9 @@ class HomePresenceApp(mqtt.Mqtt):
 
                     self.hass.set_state(user_device_sensor, state = state, attributes = {"friendly_name" : "{} Home".format(friendly_name), "device_class" : "presence"}) #create device sensor
 
+                    if state == "on" and self.hass.get_state(self.somebody_is_home, copy=False) == "off": #at least someone is home
+                        self.update_hass_sensor(self.somebody_is_home, "on")
+
                 self.hass.listen_state(self.confidence_updated, conf_sensor, device_state = device_state)
 
                 if device_state not in self.home_state_entities:
@@ -212,7 +215,7 @@ class HomePresenceApp(mqtt.Mqtt):
                     self.home_state_entities[device_state].append(conf_sensor)
                     self.hass.listen_state(self.confidence_updated, conf_sensor, device_state = device_state)
                      
-                self.update_sensor(conf_sensor, confidence)
+                self.update_hass_sensor(conf_sensor, confidence)
 
             self.set_state(appdaemon_entity, state = confidence, attributes = payload)
             if user_device_sensor not in self.all_users_sensors:
@@ -235,14 +238,14 @@ class HomePresenceApp(mqtt.Mqtt):
                     self.cancel_timer(self.not_home_timers[device_state])
                     self.not_home_timers[device_state] = None
 
-                self.update_sensor(user_device_sensor, "on")
+                self.update_hass_sensor(user_device_sensor, "on")
 
                 if self.hass.get_state(self.somebody_is_home, copy=False) == "off":
-                    self.update_sensor(self.somebody_is_home, "on") #somebody is home
+                    self.update_hass_sensor(self.somebody_is_home, "on") #somebody is home
 
                 if user_device_sensor in self.all_users_sensors: #check if everyone home
                     if self.hass.get_state(self.everyone_not_home, copy=False) == "on":
-                        self.update_sensor(self.everyone_not_home, "off")
+                        self.update_hass_sensor(self.everyone_not_home, "off")
                     
                     self.run_in(self.check_home_state, 2, check_state = 'is_home')
 
@@ -262,11 +265,11 @@ class HomePresenceApp(mqtt.Mqtt):
         self.log("Device State: {}, Sensors: {}".format(device_state, sensor_res), level = "DEBUG")
 
         if  all(list(map(lambda x: int(x) < self.minimum_conf, sensor_res))): #still confirm for the last time
-            self.update_sensor(user_device_sensor, "off")
+            self.update_hass_sensor(user_device_sensor, "off")
 
             if user_device_sensor in self.all_users_sensors: #check if everyone not home
                 '''since at least someone not home, set to off the everyone home state'''
-                self.update_sensor(self.everyone_home, "off")
+                self.update_hass_sensor(self.everyone_home, "off")
 
                 self.run_in(self.check_home_state, 2, check_state = 'not_home')
 
@@ -294,7 +297,7 @@ class HomePresenceApp(mqtt.Mqtt):
         elif kwargs['scan_type'] == 'System':
             self.mqtt_publish(topic, payload) #just send the data
 
-    def update_sensor(self, sensor, data):
+    def update_hass_sensor(self, sensor, data):
         self.log("__function__: Entity_ID: {}, Data: {}".format(sensor, data), level = "DEBUG")
         sensorState = self.hass.get_state(sensor, attribute = "all")
         state = sensorState["state"]
@@ -333,11 +336,11 @@ class HomePresenceApp(mqtt.Mqtt):
             user_res = [i for i in user_res if i != None] # remove None vales from list
 
             if all(list(map(lambda x: x == 'on', user_res))): #meaning every one is home
-                self.update_sensor(self.everyone_home, "on")
+                self.update_hass_sensor(self.everyone_home, "on")
             
             elif any(list(map(lambda x: x == 'on', user_res))): #meaning at least someone is home
                 if self.hass.get_state(self.somebody_is_home, copy=False) == "off":
-                    self.update_sensor(self.somebody_is_home, "on") #somebody is home
+                    self.update_hass_sensor(self.somebody_is_home, "on") #somebody is home
                 
         elif check_state == 'not_home':
             ''' now run to check if everyone is not home since a user is not home'''
@@ -346,13 +349,13 @@ class HomePresenceApp(mqtt.Mqtt):
             user_res = [i for i in user_res if i != None] # remove None vales from list
 
             if all(list(map(lambda x: x == 'off', user_res))): #meaning no one is home
-                self.update_sensor(self.everyone_not_home, "on")
+                self.update_hass_sensor(self.everyone_not_home, "on")
 
                 if self.hass.get_state(self.somebody_is_home, copy=False) == "on":
-                    self.update_sensor(self.somebody_is_home, "off") #somebody is home
+                    self.update_hass_sensor(self.somebody_is_home, "off") #somebody is home
             else:
                 if self.hass.get_state(self.somebody_is_home, copy=False) == "off":
-                    self.update_sensor(self.somebody_is_home, "on") #somebody is home
+                    self.update_hass_sensor(self.somebody_is_home, "on") #somebody is home
     
     def reload_device_state(self, event_name, data, kwargs):
         self.restart_device({})
@@ -410,7 +413,7 @@ class HomePresenceApp(mqtt.Mqtt):
         for device_state, entity_list in self.home_state_entities.items():
             for sensor in entity_list: 
                 if siteId in sensor: #meaning that sensor belongs to that location
-                    self.update_sensor(sensor, 0)
+                    self.update_hass_sensor(sensor, 0)
                     device_local = sensor.replace("sensor.", "")
                     appdaemon_entity = '{}.{}'.format(self.presence_topic, device_local)
                     self.set_state(appdaemon_entity, state = 0)

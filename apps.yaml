@@ -17,3 +17,6 @@ home_presence_app:
   #pin_thread: 3
   #log: apps_log
   #log_level: DEBUG
+  known_devices:
+    - xx:xx:xx:xx:xx:xx Odianosen's iPhone
+    - xx:xx:xx:xx:xx:xx Nkiruka's iPad

@@ -66,6 +66,7 @@ class HomePresenceApp(mqtt.Mqtt):
         self.listen_event(self.presence_message, 'MQTT', wildcard = '{}/#'.format(self.presence_topic))
         self.hass.listen_event(self.reload_device_state, 'plugin_restarted')
         self.reload_device_state(None, None, {})
+        self.load_known_devices() #load up devices for all locations
         
     def presence_message(self, event_name, data, kwargs):
         topic = data['topic']
@@ -92,6 +93,7 @@ class HomePresenceApp(mqtt.Mqtt):
 
             if not self.entity_exists(entity_id):
                 attributes.update({"friendly_name" : location})
+                self.load_known_devices() #load up devices for all locations
 
             self.set_state(entity_id, state = payload.title(), attributes = attributes)
 
@@ -358,9 +360,8 @@ class HomePresenceApp(mqtt.Mqtt):
                     self.update_hass_sensor(self.somebody_is_home, "on") #somebody is home
     
     def reload_device_state(self, event_name, data, kwargs):
-        self.restart_device({})
-        #topic = "{}/KNOWN DEVICE STATES".format(self.presence_topic) #get latest states
-        #self.run_in(self.send_mqtt_message, 0, topic=topic, payload="", scan_type="System")
+        topic = "{}/KNOWN DEVICE STATES".format(self.presence_topic) #get latest states
+        self.run_in(self.send_mqtt_message, 0, topic=topic, payload="", scan_type="System")
 
     def monitor_changed_state(self, entity, attribute, old, new, kwargs):
         scan = kwargs['scan']
@@ -426,3 +427,11 @@ class HomePresenceApp(mqtt.Mqtt):
 
     def system_state_changed(self, entity, attribute, old, new, kwargs):
         self.reload_device_state(None, None, {})
+
+    def load_known_devices(self):
+        topic = "{}/setup/ADD STATIC DEVICE".format(self.presence_topic)
+        timer = 0
+        for device in self.args["known_devices"]:
+            payload = device
+            self.run_in(self.send_mqtt_message, timer, topic=topic, payload=payload, scan_type="System")
+            timer += 15

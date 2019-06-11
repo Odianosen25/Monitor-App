@@ -106,7 +106,7 @@ class HomePresenceApp(mqtt.Mqtt):
             self.log('The Presence System is Restarting') 
             return
 
-        elif topic.split('/')[-1].lower() in ["depart", "arrive", "KNOWN DEVICE STATES"]: #meaning its something we not interested in
+        elif topic.split('/')[-1].lower() in ["depart", "arrive", "known device states", "add static device", "delete static device"]: #meaning its something we not interested in
             return
         
         try:

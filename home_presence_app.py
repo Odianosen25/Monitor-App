@@ -121,7 +121,7 @@ class HomePresenceApp(mqtt.Mqtt):
         if topic.split('/')[-1] == 'start': #meaning a scan is starting
             location = payload['identity']
             #self.log("The system in the {} is scanning".format(location))
-            if self.get_state(self.monitor_entity) != 'scanning':
+            if self.get_state(self.monitor_entity, copy=False) != 'scanning':
                 '''since its idle, just set it to scanning and put in the location of the scan'''
                 self.set_state(self.monitor_entity, state = 'scanning', attributes = {'scan_type' : topic.split('/')[2], 'locations': [location], location : 'scanning'}) 
             else: #meaning it was already set to 'scanning' already, so just update the location
@@ -156,7 +156,7 @@ class HomePresenceApp(mqtt.Mqtt):
 
                 self.location_timers[location] = self.run_in(self.clear_location_entities, self.system_timeout, location = location)
 
-                if self.get_state(entity_id) == "Offline":
+                if self.get_state(entity_id, copy=False) == "Offline":
                     self.set_state(entity_id, state = "Online")
             return
 
@@ -232,7 +232,7 @@ class HomePresenceApp(mqtt.Mqtt):
         user_conf_sensors = self.home_state_entities.get(device_state, None)
     
         if user_conf_sensors != None:
-            sensor_res = list(map(lambda x: self.hass.get_state(x), user_conf_sensors))
+            sensor_res = list(map(lambda x: self.hass.get_state(x, copy=False), user_conf_sensors))
             sensor_res = [i for i in sensor_res if i != 'unknown'] # remove unknown vales from list
             sensor_res = [i for i in sensor_res if i != None] # remove None values from list
             if  sensor_res != [] and any(list(map(lambda x: int(x) >= self.minimum_conf, sensor_res))): #meaning at least one of them states is greater than the minimum so device definitely home
@@ -252,8 +252,8 @@ class HomePresenceApp(mqtt.Mqtt):
                     self.run_in(self.check_home_state, 2, check_state = 'is_home')
 
             else:
-                self.log("Device State: {}, User Device Sensor: {}, New: {}, State: {}".format(device_state, user_device_sensor, new, self.hass.get_state(user_device_sensor)), level = "DEBUG")
-                if self.not_home_timers[device_state] == None and self.hass.get_state(user_device_sensor) != 'off' and int(new) == 0: #run the timer
+                self.log("Device State: {}, User Device Sensor: {}, New: {}, State: {}".format(device_state, user_device_sensor, new, self.hass.get_state(user_device_sensor, copy=False)), level = "DEBUG")
+                if self.not_home_timers[device_state] == None and self.hass.get_state(user_device_sensor, copy=False) != 'off' and int(new) == 0: #run the timer
                     self.run_arrive_scan() #run so it does another scan before declaring the user away as extra check within the timeout time
                     self.not_home_timers[device_state] = self.run_in(self.not_home_func, self.timeout, device_state = device_state)
                     self.log("Timer Started for {}".format(device_state), level = "DEBUG")
@@ -262,7 +262,7 @@ class HomePresenceApp(mqtt.Mqtt):
         device_state = kwargs['device_state']
         user_device_sensor = 'binary_sensor.' + device_state
         user_conf_sensors = self.home_state_entities[device_state]
-        sensor_res = list(map(lambda x: self.hass.get_state(x), user_conf_sensors))
+        sensor_res = list(map(lambda x: self.hass.get_state(x, copy=False), user_conf_sensors))
         sensor_res = [i for i in sensor_res if i != 'unknown'] # remove unknown vales from list
         self.log("Device State: {}, Sensors: {}".format(device_state, sensor_res), level = "DEBUG")
 
@@ -317,10 +317,10 @@ class HomePresenceApp(mqtt.Mqtt):
             self.cancel_timer(self.gateway_timer)
             self.gateway_timer = None
 
-        if self.hass.get_state(self.everyone_not_home) == 'on': #meaning no one at home
+        if self.hass.get_state(self.everyone_not_home, copy=False) == 'on': #meaning no one at home
             self.run_arrive_scan()
 
-        elif self.hass.get_state(self.everyone_home) == 'on': #meaning everyone at home
+        elif self.hass.get_state(self.everyone_home, copy=False) == 'on': #meaning everyone at home
             self.run_depart_scan()
             #self.run_depart_scan(delay = 90)
 
@@ -333,7 +333,7 @@ class HomePresenceApp(mqtt.Mqtt):
         check_state = kwargs['check_state']
         if check_state == 'is_home':
             ''' now run to check if everyone is home since a user is home'''
-            user_res = list(map(lambda x: self.hass.get_state(x), self.all_users_sensors))
+            user_res = list(map(lambda x: self.hass.get_state(x, copy=False), self.all_users_sensors))
             user_res = [i for i in user_res if i != 'unknown'] # remove unknown vales from list
             user_res = [i for i in user_res if i != None] # remove None vales from list
 
@@ -346,7 +346,7 @@ class HomePresenceApp(mqtt.Mqtt):
                 
         elif check_state == 'not_home':
             ''' now run to check if everyone is not home since a user is not home'''
-            user_res = list(map(lambda x: self.hass.get_state(x), self.all_users_sensors))
+            user_res = list(map(lambda x: self.hass.get_state(x, copy=False), self.all_users_sensors))
             user_res = [i for i in user_res if i != 'unknown'] # remove unknown vales from list
             user_res = [i for i in user_res if i != None] # remove None vales from list
 
@@ -376,7 +376,7 @@ class HomePresenceApp(mqtt.Mqtt):
         payload = ''
 
         '''used to listen for when the monitor is free, and then send the message'''
-        if self.get_state(self.monitor_entity) == 'idle': #meaning its not busy
+        if self.get_state(self.monitor_entity, copy=False) == 'idle': #meaning its not busy
             self.mqtt_publish(topic, payload) #send to scan for arrival of anyone
         else:
             '''meaning it is busy so wait for it to get idle before sending the message'''

@@ -16,7 +16,7 @@ How to setup the monitor (not presence) system can be seen in the link above, an
 Added to the above, the App does the following:
 -----------------------------------------------
 
-- Abiltity to define the devices in a single place within AD, which is then loaded to all monitor systems on the network. This can be useful, if having multiple monitor systems, and need to manage all known devices from a single place, instead of having to change it in all systems.
+- Abiltity to define the devices in a single place within AD, which is then loaded to all monitor systems on the network. This can be useful, if having multiple monitor systems, and need to manage all known devices from a single place, instead of having to change it in all systems individually.
 - Generates entities within AD, which has all the data published by the script per device, and can be listened to in other Apps for other automation reasons. For example `rssi` readings based on devices.
 - Constantly checks for all installed scripts on the network, to ensure which is online. If any location doesn't respond after a set time `system_timeout`, it sets all entities generated from that location to `0`.
 - Requests all devices update from the scripts on the network on a system restart

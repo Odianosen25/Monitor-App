@@ -6,8 +6,8 @@ class HomePresenceApp(ad.ADBase):
  
     def initialize(self):
         self.adbase = self.get_ad_api()
-        self.hass = self.get_plugin_api("HASS")
-        self.mqtt = self.get_plugin_api("MQTT")
+        self.hass = self.get_plugin_api("HASS") #get hass api
+        self.mqtt = self.get_plugin_api("MQTT") #get mqtt api
 
         self.presence_topic = self.args.get('monitor_topic', 'presence')
         self.timeout = self.args.get('not_home_timeout', 30) #time interval before declaring not home
@@ -32,22 +32,9 @@ class HomePresenceApp(ad.ADBase):
         self.everyone_home = "binary_sensor.everyone_home"
         self.somebody_is_home = "binary_sensor.somebody_is_home"
 
+        self.setup_global_sensors() #setup the gbove sensors
+
         self.gateway_timer = None #run only a single timer at a time, to avoid sending multiple messages to the monitor
-
-        if not self.hass.entity_exists(self.everyone_not_home): #check if the sensor exist and if not create it
-            self.adbase.log('Creating Binary Sensor for Everyone Not Home State')
-            attributes = {"friendly_name": "Everyone Not Home", "device_class" : "presence"}
-            self.hass.set_state(self.everyone_not_home, state = "off", attributes = attributes) #send to homeassistant to create binary sensor sensor for home state
-
-        if not self.hass.entity_exists(self.everyone_home): #check if the sensor exist and if not create it
-            self.adbase.log('Creating Binary Sensor for Everyone Home State')
-            attributes = {"friendly_name": "Everyone Home", "device_class" : "presence"}
-            self.hass.set_state(self.everyone_home, state = "off", attributes = attributes) #send to homeassistant to create binary sensor sensor for home state
-
-        if not self.hass.entity_exists(self.somebody_is_home): #check if the sensor exist and if not create it
-            self.adbase.log('Creating Binary Sensor for Somebody is Home')
-            attributes = {"friendly_name": "Somebody is Home State", "device_class" : "presence"}
-            self.hass.set_state(self.somebody_is_home, state = "off", attributes = attributes) #send to homeassistant to create binary sensor sensor for home state
 
         '''setup home gateway sensors'''
         for gateway_sensor in self.args['home_gateway_sensors']:
@@ -66,8 +53,8 @@ class HomePresenceApp(ad.ADBase):
             self.adbase.log("Cannot setup System Check due to System Timeout being Loswer than System Check in Seconds", level = "WARNING")
 
         self.mqtt.listen_event(self.presence_message, 'MQTT', wildcard = '{}/#'.format(self.presence_topic))
-        self.hass.listen_event(self.reload_device_state, 'plugin_restarted')
-        self.reload_device_state(None, None, {})
+        self.hass.listen_event(self.hass_restarted, 'plugin_restarted')
+        self.reload_device_state()
         self.adbase.run_in(self.load_known_devices, 0) #load up devices for all locations
         
     def presence_message(self, event_name, data, kwargs):
@@ -361,7 +348,7 @@ class HomePresenceApp(ad.ADBase):
                 if self.hass.get_state(self.somebody_is_home, copy=False) == "off":
                     self.update_hass_sensor(self.somebody_is_home, "on") #somebody is home
     
-    def reload_device_state(self, event_name, data, kwargs):
+    def reload_device_state(self, **kwargs):
         topic = "{}/KNOWN DEVICE STATES".format(self.presence_topic) #get latest states
         self.adbase.run_in(self.send_mqtt_message, 0, topic=topic, payload="", scan_type="System")
 
@@ -428,7 +415,7 @@ class HomePresenceApp(ad.ADBase):
         self.mqtt.set_state(entity_id, state = "Offline")
 
     def system_state_changed(self, entity, attribute, old, new, kwargs):
-        self.reload_device_state(None, None, {})
+        self.reload_device_state()
 
     def load_known_devices(self, kwargs):
         topic = "{}/setup/ADD STATIC DEVICE".format(self.presence_topic)
@@ -442,3 +429,23 @@ class HomePresenceApp(ad.ADBase):
         device = kwargs["device"]
         topic = "{}/setup/DELETE STATIC DEVICE".format(self.presence_topic)
         self.adbase.run_in(self.send_mqtt_message, 0, topic=topic, payload=device, scan_type="System")
+
+    def hass_restarted(self, event, data, kwargs):
+        self.setup_global_sensors()
+        self.reload_device_state()
+
+    def setup_global_sensors(self):
+        if not self.hass.entity_exists(self.everyone_not_home): #check if the sensor exist and if not create it
+            self.adbase.log('Creating Binary Sensor for Everyone Not Home State')
+            attributes = {"friendly_name": "Everyone Not Home", "device_class" : "presence"}
+            self.hass.set_state(self.everyone_not_home, state = "off", attributes = attributes) #send to homeassistant to create binary sensor sensor for home state
+
+        if not self.hass.entity_exists(self.everyone_home): #check if the sensor exist and if not create it
+            self.adbase.log('Creating Binary Sensor for Everyone Home State')
+            attributes = {"friendly_name": "Everyone Home", "device_class" : "presence"}
+            self.hass.set_state(self.everyone_home, state = "off", attributes = attributes) #send to homeassistant to create binary sensor sensor for home state
+
+        if not self.hass.entity_exists(self.somebody_is_home): #check if the sensor exist and if not create it
+            self.adbase.log('Creating Binary Sensor for Somebody is Home')
+            attributes = {"friendly_name": "Somebody is Home State", "device_class" : "presence"}
+            self.hass.set_state(self.somebody_is_home, state = "off", attributes = attributes) #send to homeassistant to create binary sensor sensor for home state

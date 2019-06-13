@@ -1,4 +1,4 @@
-# Monitor-App
+# Monitor-Appdaemon-App
 Appdaemon App for [Andrew's Monitor Presence Detection System](https://github.com/andrewjfreyer/monitor).
 
 The Monitor Presence Detection system, is a Bash script `monitor.sh` created by Andrew Freyer, which is designed to run on a Linux system like the Raspberry Pi. It is designed to be used as a distributed system, having multiple nodes within the environment it is functioning to ensure total coverage, and these systems used to detect the presence of Bluetooth devices. It works by reporting the detected devices to an MQTT broker, which can then be integrated into an automation hub like Home-Assistant. More details of the script, how it functions and setup can be found by following the link above. This App is designed to maximise the use of the detection system, so that the user can easily have it interated into their system with as less effort as possible, no matter the number of users or nodes in place.
@@ -7,7 +7,7 @@ This app can be added to an Appdaemon system, which will help to auto generate e
 
 - Generates sensors in HA for the following
     - Sensors of the Confidence levels for each device based on each location. So if you have 3 presence systems, each known device will       have 3 confidence sensors with the names sensor.<device name>_location in both HA and AD.
-    - Binary Sensors for each device. So no matter the number of location sensors you have, only one is generated and this is a presence       sensor. The sensor entity_id will be binary_sensor.<device name>_home_state. So if one has an entry in the known_static_address as       xx:xx:xx:xx:xx:xx odianosen's iphone it will generate `binary_sensor.odianosens_iphone_s_home_state`
+    - Binary Sensors for each device. So no matter the number of location sensors you have, only one is generated and this is a presence       sensor. The sensor entity_id will be binary_sensor.<device name>_home. So if one has an entry in the known_static_address as       xx:xx:xx:xx:xx:xx odianosen's iphone it will generate `binary_sensor.odianosens_iphone_s_home`
     - Binary sensors for when everyone is in `binary_sensor.everyone_home`, when everyone is out `binary_sensor.everyone_not_home`.     These sensors are set to ON or OFF  depending on declared users in the apps.yaml file users_sensors are in or out. If some are in and some out, both will be OFF, but another sensor `binary_sensor.somebody_is_home` can be used. This is handy for other automation rules.
 - If a device is seen to be below the configured minimum confidence minimum_confidence level across all locations which defaults to 90,   a configurable not_home_timeout is ran before declaring the user device is not home in HA using the binary sensor generated for that     device.
 - When one of the declared gateway_sensors in the apps.yaml is opened, based on who is in the house it will send a scan instruction to     the monitor system.

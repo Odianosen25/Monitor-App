@@ -35,11 +35,17 @@ class HomePresenceApp(ad.ADBase):
         self.setup_global_sensors() #setup the gbove sensors
 
         self.gateway_timer = None #run only a single timer at a time, to avoid sending multiple messages to the monitor
+        self.motion_timer = None #run only a single timer at a time, to avoid sending multiple messages to the monitor
 
         '''setup home gateway sensors'''
-        for gateway_sensor in self.args['home_gateway_sensors']:
+        for gateway_sensor in self.args.get('home_gateway_sensors', []):
             '''it is assumed when the sensor is "on" it is opened and "off" is closed'''
             self.hass.listen_state(self.gateway_opened, gateway_sensor) #when the door is either opened or closed
+
+        '''setup home motion sensors, used for RSSI'''
+        for motion_sensor in self.args.get('home_motion_sensors', []):
+            '''it is assumed when the sensor is "on" motion detected and "off" motion not detected after timeout'''
+            self.hass.listen_state(self.motion_detected, motion_sensor, new ="off") #only run when no motion detected
 
         time = datetime.time(0, 0, 1)
         #self.adbase.run_daily(self.restart_device, time) #restart device at midnight everyday
@@ -208,7 +214,10 @@ class HomePresenceApp(ad.ADBase):
                      
                 self.update_hass_sensor(conf_sensor, confidence)
 
+            #add location to payload, so its available in the AD entity's data
+            payload["location"] = location #good when writing app to triagulate location
             self.mqtt.set_state(appdaemon_entity, state = confidence, attributes = payload)
+
             if user_device_sensor not in self.all_users_sensors:
                 self.all_users_sensors.append(user_device_sensor)
 
@@ -299,8 +308,8 @@ class HomePresenceApp(ad.ADBase):
             self.hass.set_state(sensor, state = state, attributes = attributes)
 
     def gateway_opened(self, entity, attribute, old, new, kwargs):
-        '''one of the gateways was opened and so needs to check what happened'''
-        self.adbase.log("Gateway Sensor " + new)
+        '''one of the gateways was opened or closed and so needs to check what happened'''
+        self.adbase.log("Gateway Sensor {} now {}".format(entity, new), level="DEBUG")
 
         if self.gateway_timer != None: #meaning a timer is running already
             self.adbase.cancel_timer(self.gateway_timer)
@@ -317,6 +326,19 @@ class HomePresenceApp(ad.ADBase):
             self.run_arrive_scan()
             self.run_depart_scan()
             #self.run_depart_scan(delay = 90)
+
+    def motion_detected(self, entity, attribute, old, new, kwargs):
+        '''motion detected somewhere in the house, so needs to check for where users are'''
+        self.adbase.log("Motion Sensor {} now {}".format(entity, new), level="DEBUG")
+
+        if self.motion_timer != None: #meaning a timer is running already
+            self.adbase.cancel_timer(self.motion_timer)
+            self.motion_timer = None
+
+        """ 'duraction' parameter could be used in listen_state. 
+            But need to use a single timer for all motion sensors, 
+            to avoid running the scan too many times"""
+        self.motion_timer = self.adbase.run_in(self.run_rssi_scan, self.args.get("rssi_timeout", 30))
 
     def check_home_state(self, kwargs):
         check_state = kwargs['check_state']
@@ -372,7 +394,6 @@ class HomePresenceApp(ad.ADBase):
             if self.monitor_handlers.get('Arrive Scan', None) == None: #meaning its not listening already
                 self.monitor_handlers['Arrive Scan'] = self.mqtt.listen_state(self.monitor_changed_state, self.monitor_entity, 
                             new = 'idle', old = 'scanning', scan = 'Arrive Scan', topic = topic, payload = payload)
-        return
 
     def run_depart_scan(self, **kwargs):
         delay = kwargs.get('delay', self.depart_check_time)
@@ -386,7 +407,10 @@ class HomePresenceApp(ad.ADBase):
 
         self.gateway_timer = self.adbase.run_in(self.send_mqtt_message, delay, topic = topic, 
                         payload = payload, scan_type = 'Depart', count = count) #send to scan for departure of anyone
-        return
+
+    def run_rssi_scan(self, kwargs):
+        self.run_arrive_scan() #run scan for arrival. This should be an RSSI scan if available
+        self.motion_timer = None
 
     def restart_device(self, kwargs):
         topic = '{}/scan/restart'.format(self.presence_topic)

@@ -12,6 +12,10 @@ home_presence_app:
   system_timeout: 60
   home_gateway_sensors:
     - binary_sensor.main_door_contact
+  home_motion_sensors:
+    - binary_sensor.motion_sensor_occupancy_1
+    - binary_sensor.motion_sensor_occupancy_2
+    - binary_sensor.hallway_motion_sensor_occupancy
 
   #pin_app: True
   #pin_thread: 3

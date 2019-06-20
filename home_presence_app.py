@@ -45,7 +45,7 @@ class HomePresenceApp(ad.ADBase):
         '''setup home motion sensors, used for RSSI'''
         for motion_sensor in self.args.get('home_motion_sensors', []):
             '''it is assumed when the sensor is "on" motion detected and "off" motion not detected after timeout'''
-            self.hass.listen_state(self.motion_detected, motion_sensor, new ="off") #only run when no motion detected
+            self.hass.listen_state(self.motion_detected, motion_sensor) #if any motion is detected
 
         time = datetime.time(0, 0, 1)
         #self.adbase.run_daily(self.restart_device, time) #restart device at midnight everyday
@@ -338,7 +338,7 @@ class HomePresenceApp(ad.ADBase):
         """ 'duraction' parameter could be used in listen_state. 
             But need to use a single timer for all motion sensors, 
             to avoid running the scan too many times"""
-        self.motion_timer = self.adbase.run_in(self.run_rssi_scan, self.args.get("rssi_timeout", 30))
+        self.motion_timer = self.adbase.run_in(self.run_rssi_scan, self.args.get("rssi_timeout", 60))
 
     def check_home_state(self, kwargs):
         check_state = kwargs['check_state']
@@ -391,7 +391,8 @@ class HomePresenceApp(ad.ADBase):
             self.mqtt.mqtt_publish(topic, payload) #send to scan for arrival of anyone
         else:
             '''meaning it is busy so wait for it to get idle before sending the message'''
-            if self.monitor_handlers.get('Arrive Scan', None) == None: #meaning its not listening already
+            scan_type = self.mqtt.get_state(self.monitor_entity, attribute="scan_type", copy=False)
+            if self.monitor_handlers.get('Arrive Scan', None) == None and scan_type != "arrival": #meaning its not listening already, and arrival not running now
                 self.monitor_handlers['Arrive Scan'] = self.mqtt.listen_state(self.monitor_changed_state, self.monitor_entity, 
                             new = 'idle', old = 'scanning', scan = 'Arrive Scan', topic = topic, payload = payload)
 

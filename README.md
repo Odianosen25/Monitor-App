@@ -34,11 +34,11 @@ To maximise the app, it will be advisable to setup the system in the home as fol
 
 - Use Appdaemon >= 4.0 (of course :roll_eyes:)
 - Make use of the Appdaemon MQTT plugin. 
-- Have a single main sensor, which runs as `monitor.sh -tdr -a -b` in a location that users stay more often in line with @andrewjfreyer example setup. If having more than 1 sensor, have the rest run as `monitor.sh -tad -a -b` so they only scan on trigger for both arrival and departutre.
+- Have a single main sensor, which runs as `monitor.sh -tdr -a -b` in a location that users stay more often in line with @andrewjfreyer example setup. If having more than 1 monitor, have the rest run as `monitor.sh -tad -a -b` so they only scan on trigger for both arrival and departutre.
 - In the main sensor, have good spacing between scans, not only to avoid unnecessarily flooding your environment with scans but also allowing the app to take over scans intermittently. I have mine set at 120 secs throughout for now
 - Have sensors at the entrances into the home which I termed `gateways`, whether it be doors or garages. Windows also for those that use it :wink:
 
 RSSI Tracking:
 --------------
 
-Within this app, RSSI tracking is also updated regurlarly on the AppDaemon based entities. I personally use this, for rudimentary home area tracking. To do this, the app also integrates the use of motion sensors within the home. As at the time of last update, the `monitor.sh` script has not way of requesting the RSSI values alone of scanned/available devices. So to do this, the system carries out arrival scans when motion is detected within the home. To do this, all monitor systems is adivsied to run as `monitor.sh -tad -a -b` and the `PREF_MQTT_REPORT_SCAN_MESSAGES` should be set to `true` in preferences.
+Within this app, RSSI tracking is also updated regurlarly on the AppDaemon based entities. I personally use this, for rudimentary home area tracking. To do this, the app also integrates the use of motion sensors within the home. As at the time of last update, the `monitor.sh` script has not way of requesting the RSSI values alone of scanned/available devices. So to do this, the system carries out arrival scans when motion is detected within the home. To use this feature, it is advised that all monitor systems are setup as `monitor.sh -tad -a -b` and the `PREF_MQTT_REPORT_SCAN_MESSAGES` should be set to `true` in preferences. I also found using this `arrival` scans based on motion sensors, to keep my systems reported state update. I am not advising the get motion sensors for this, but in my home I already had motion sensors for lights. So felt I may as well integrate it to imporve on reliability. 

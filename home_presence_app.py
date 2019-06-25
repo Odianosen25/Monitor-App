@@ -56,7 +56,7 @@ class HomePresenceApp(ad.ADBase):
             self.adbase.run_every(self.send_mqtt_message, time, system_check, topic=topic, payload="", scan_type="System")
         
         else:
-            self.adbase.log("Cannot setup System Check due to System Timeout being Loswer than System Check in Seconds", level = "WARNING")
+            self.adbase.log("Cannot setup System Check due to System Timeout being Lower than System Check in Seconds", level = "WARNING")
 
         self.mqtt.listen_event(self.presence_message, 'MQTT', wildcard = '{}/#'.format(self.presence_topic))
         self.hass.listen_event(self.hass_restarted, 'plugin_restarted')

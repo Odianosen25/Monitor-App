@@ -18,7 +18,7 @@ Added to the above, the App does the following:
 
 - Abiltity to define the `known_devices` in a single place within AD, which is then loaded to all monitor systems on the network. This can be useful, if having multiple monitor systems, and need to manage all `known_devices` from a single place, instead of having to change it in all systems individually.
 - Generates entities within AD, which has all the data published by the script per device, and can be listened to in other Apps for other automation reasons. For example `rssi` readings based on devices.
-- Constantly checks for all installed scripts on the network, to ensure which is online. If any location doesn't respond after a set time `system_timeout`, it sets all entities generated from that location to `0`.
+- Constantly checks for all installed scripts on the network, to ensure which is online. If any location doesn't respond after a set time `system_timeout`, it sets all entities generated from that location to `0`. This is very useful if for example, as system reported a device confidence of `100`, then it went down. The device will stay at `100` even if the user had left the house, which will lead to wrong state.
 - Requests all devices update from the scripts on the network on a system restart
 
 When developing this app, 4 main things were my target:

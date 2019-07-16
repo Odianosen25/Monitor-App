@@ -24,6 +24,8 @@ class HomePresenceApp(ad.ADBase):
         self.monitor_entity = '{}.monitor_state'.format(self.presence_topic) #used to check if the network monitor is busy 
         if not self.mqtt.entity_exists(self.monitor_entity):
             self.mqtt.set_state(self.monitor_entity, state = 'idle', attributes = {'locations': []}, replace = True) #set it to idle initially
+        
+        self.mqtt.listen_state(self.monitor_scan_now, self.monitor_entity, new = "scan")
 
         self.monitor_handlers = dict() #used to store different handlers
         self.monitor_handlers[self.monitor_entity] = None
@@ -47,7 +49,7 @@ class HomePresenceApp(ad.ADBase):
             '''it is assumed when the sensor is "on" motion detected and "off" motion not detected after timeout'''
             self.hass.listen_state(self.motion_detected, motion_sensor) #if any motion is detected
 
-        time = datetime.time(0, 0, 1)
+        time = "00:00:01"
         #self.adbase.run_daily(self.restart_device, time) #restart device at midnight everyday
 
         if self.system_timeout > system_check:
@@ -60,7 +62,7 @@ class HomePresenceApp(ad.ADBase):
 
         self.mqtt.listen_event(self.presence_message, 'MQTT', wildcard = '{}/#'.format(self.presence_topic))
         self.hass.listen_event(self.hass_restarted, 'plugin_restarted')
-        self.reload_device_state()
+        self.adbase.run_in(self.reload_device_state, 5) #reload systems
         self.adbase.run_in(self.load_known_devices, 0) #load up devices for all locations
         
     def presence_message(self, event_name, data, kwargs):
@@ -161,7 +163,7 @@ class HomePresenceApp(ad.ADBase):
         device_local = '{}_{}'.format(device_name, siteId)
         appdaemon_entity = '{}.{}'.format(self.presence_topic, device_local)
 
-        if topic.split('/')[-1] == 'rssi': #meaningits for rssi
+        if topic.split('/')[-1] == 'rssi': #meaning its for rssi
             self.mqtt.set_state(appdaemon_entity, attributes = attributes)
         
         elif isinstance(payload, dict) and payload.get('type', None) in ['KNOWN_MAC', 'GENERIC_BEACON']:
@@ -178,6 +180,11 @@ class HomePresenceApp(ad.ADBase):
             device_state = '{}_home'.format(device_name)
             user_device_sensor = 'binary_sensor.{}'.format(device_state)
 
+            if confidence >= self.minimum_conf:
+                state = "on"
+            else:
+                state = "off"
+
             if not self.hass.entity_exists(conf_sensor): #meaning it doesn't exist
                 self.adbase.log('Creating sensor {!r} for Confidence'.format(conf_sensor))
                 self.hass.set_state(conf_sensor, state = confidence, attributes = {"friendly_name" : "{} {} Confidence".format(friendly_name, location)}) #create sensor for confidence
@@ -186,17 +193,12 @@ class HomePresenceApp(ad.ADBase):
                 if not self.hass.entity_exists(user_device_sensor): #meaning it doesn't exist.
                     self.adbase.log('Creating sensor {!r} for Home State'.format(user_device_sensor))
 
-                    if confidence >= self.minimum_conf:
-                        state = "on"
-                    else:
-                        state = "off"
-
                     self.hass.set_state(user_device_sensor, state = state, attributes = {"friendly_name" : "{} Home".format(friendly_name), "device_class" : "presence"}) #create device sensor
 
                     if state == "on" and self.hass.get_state(self.somebody_is_home, copy=False) == "off": #at least someone is home
                         self.update_hass_sensor(self.somebody_is_home, "on")
 
-                self.hass.listen_state(self.confidence_updated, conf_sensor, device_state = device_state)
+                self.hass.listen_state(self.confidence_updated, conf_sensor, device_state = device_state, immediate = True) #process the change immedaitely
 
                 if device_state not in self.home_state_entities:
                     self.home_state_entities[device_state] = list()
@@ -210,9 +212,12 @@ class HomePresenceApp(ad.ADBase):
 
                 if conf_sensor not in self.home_state_entities[device_state]:
                     self.home_state_entities[device_state].append(conf_sensor)
-                    self.hass.listen_state(self.confidence_updated, conf_sensor, device_state = device_state)
+                    self.hass.listen_state(self.confidence_updated, conf_sensor, device_state = device_state, immediate = True)
                      
                 self.update_hass_sensor(conf_sensor, confidence)
+
+                #if state == "on" and self.hass.entity_exists(user_device_sensor) and self.hass.get_state(user_device_sensor, copy=False) != state: #meaning it exist but state not right.
+                #    self.update_hass_sensor(user_device_sensor, state)
 
             #add location to payload, so its available in the AD entity's data
             payload["location"] = location #good when writing app to triagulate location
@@ -370,7 +375,7 @@ class HomePresenceApp(ad.ADBase):
                 if self.hass.get_state(self.somebody_is_home, copy=False) == "off":
                     self.update_hass_sensor(self.somebody_is_home, "on") #somebody is home
     
-    def reload_device_state(self, **kwargs):
+    def reload_device_state(self, kwargs):
         topic = "{}/KNOWN DEVICE STATES".format(self.presence_topic) #get latest states
         self.adbase.run_in(self.send_mqtt_message, 0, topic=topic, payload="", scan_type="System")
 
@@ -383,7 +388,7 @@ class HomePresenceApp(ad.ADBase):
         self.monitor_handlers[scan] = None
 
     def run_arrive_scan(self, **kwargs):
-        topic = '{}/scan/Arrive'.format(self.presence_topic)
+        topic = '{}/scan/arrive'.format(self.presence_topic)
         payload = ''
 
         '''used to listen for when the monitor is free, and then send the message'''
@@ -400,7 +405,7 @@ class HomePresenceApp(ad.ADBase):
         delay = kwargs.get('delay', self.depart_check_time)
         count = kwargs.get('count', 1)
 
-        topic ='{}/scan/Depart'.format(self.presence_topic)
+        topic ='{}/scan/depart'.format(self.presence_topic)
         payload = ''
 
         if self.gateway_timer != None: #meaning a timer running aleady
@@ -431,7 +436,7 @@ class HomePresenceApp(ad.ADBase):
                     self.update_hass_sensor(sensor, 0)
                     device_local = sensor.replace("sensor.", "")
                     appdaemon_entity = '{}.{}'.format(self.presence_topic, device_local)
-                    self.mqtt.set_state(appdaemon_entity, state = 0)
+                    self.mqtt.set_state(appdaemon_entity, state = 0, rssi = "-99")
 
         if location in self.location_timers:
             self.location_timers.pop(location)
@@ -440,7 +445,23 @@ class HomePresenceApp(ad.ADBase):
         self.mqtt.set_state(entity_id, state = "Offline")
 
     def system_state_changed(self, entity, attribute, old, new, kwargs):
-        self.reload_device_state()
+        self.adbase.run_in(self.reload_device_state, 0)
+    
+    def monitor_scan_now(self, entity, attribute, old, new, kwargs):
+        scan_type = self.mqtt.get_state(entity, attribute="scan_type", copy=False)
+        locations = self.mqtt.get_state(entity, attribute="locations", copy=False)
+
+        if scan_type == "both":
+            self.run_arrive_scan(location=locations)
+            self.run_depart_scan(location=locations)
+        
+        elif scan_type == "arrival":
+            self.run_arrive_scan(location=locations)
+        
+        elif scan_type == "depart":
+            self.run_depart_scan(location=locations)
+
+        self.mqtt.set_state(entity, state = "idle")
 
     def load_known_devices(self, kwargs):
         topic = "{}/setup/ADD STATIC DEVICE".format(self.presence_topic)
@@ -457,7 +478,7 @@ class HomePresenceApp(ad.ADBase):
 
     def hass_restarted(self, event, data, kwargs):
         self.setup_global_sensors()
-        self.reload_device_state()
+        self.adbase.run_in(self.reload_device_state, 10)
 
     def setup_global_sensors(self):
         if not self.hass.entity_exists(self.everyone_not_home): #check if the sensor exist and if not create it

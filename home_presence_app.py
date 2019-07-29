@@ -1,10 +1,15 @@
-import adbase as ad
+"""AppDaemon App For use with Monitor Bluetooth Presence Detection Script."""
 import json
 import datetime
+import adbase as ad
+
 
 class HomePresenceApp(ad.ADBase):
+    """Home Precence App Main Class."""
 
     def initialize(self):
+        """Initialize AppDaemon App."""
+        # pylint: disable=attribute-defined-outside-init
         self.adbase = self.get_ad_api()
         self.hass = self.get_plugin_api("HASS") #get hass api
         self.mqtt = self.get_plugin_api("MQTT") #get mqtt api
@@ -66,168 +71,215 @@ class HomePresenceApp(ad.ADBase):
         self.adbase.run_in(self.load_known_devices, 0) #load up devices for all locations
 
     def presence_message(self, event_name, data, kwargs):
+        """Process a message sent on the MQTT Topic."""
         topic = data['topic']
         payload = data['payload']
-        self.adbase.log("{} payload: {}".format(topic, payload), level = "DEBUG")
+        self.adbase.log("{} payload: {}".format(topic, payload), level="DEBUG")
 
-        if topic.split('/')[-1] == 'status': #meaning its a message on the presence system
-            location = topic.split('/')[1].replace('_',' ').title()
-            siteId = location.lower().replace(" ", "_")
+        topic_path = topic.split('/')
+        action = topic_path[-1].lower()
 
-            self.adbase.log('The Presence System in the {} is {}'.format(location, payload.title()), level = "DEBUG")
-
-            if payload.title() == 'Offline': #run timer so to clear all entities for that location
-                if location in self.location_timers:
-                    self.adbase.cancel_timer(self.location_timers[location])
-
-                self.location_timers[location] = self.adbase.run_in(self.clear_location_entities, self.system_timeout, location = location)
-
-            elif payload.title() == 'Online' and location in self.location_timers:
-                self.adbase.cancel_timer(self.location_timers[location])
-
-            entity_id = "{}.{}".format(self.presence_topic, siteId)
-            attributes = {}
-
-            if not self.mqtt.entity_exists(entity_id):
-                attributes.update({"friendly_name" : location})
-                self.adbase.run_in(self.load_known_devices, 30) #load up devices for all locations
-
-            self.mqtt.set_state(entity_id, state = payload.title(), attributes = attributes)
-
-            if self.system_handle.get(entity_id, None) == None:
-                self.system_handle[entity_id] = self.mqtt.listen_state(self.system_state_changed, entity_id, old = "Offline", new = "Online")
-
-            return
-
-        elif topic.split('/')[-1] == 'restart': #meaning its a message is a restart
-            self.adbase.log('The Presence System is Restarting')
-            return
-
-        elif topic.split('/')[-1].lower() in ["depart", "arrive", "known device states", "add static device", "delete static device"]: #meaning its something we not interested in
-            return
-
+        # Process the payload
+        payload_json = {}
         try:
-            if topic.split('/')[-1] == "rssi": #meaning its for rssi
-                attributes = {"rssi" : payload}
-            else:
-                payload = json.loads(payload)
-        except:
+            payload_json = json.loads(payload)
+        except ValueError:
+            pass
 
+        # Determine which scanner initiated the message
+        location = 'unknown'
+        if hasattr(payload_json, 'identity'):
+            location = payload_json.get('identity', 'unknown')
+        elif len(topic_path) > 2:
+            location = topic_path[2]
+        location = location.replace(' ', '_').lower()
+        location_friendly = location.replace('_', ' ').title()
+
+        # Presence System is Restarting
+        if action == 'restart':
+            self.adbase.log('The Presence System is Restarting', level="INFO")
             return
 
-        if topic.split('/')[-1] == 'start': #meaning a scan is starting
-            location = payload['identity']
-            #self.adbase.log("The system in the {} is scanning".format(location))
-            if self.mqtt.get_state(self.monitor_entity, copy=False) != 'scanning':
-                '''since its idle, just set it to scanning and put in the location of the scan'''
-                self.mqtt.set_state(self.monitor_entity, state = 'scanning', attributes = {'scan_type' : topic.split('/')[2], 'locations': [location], location : 'scanning'})
-            else: #meaning it was already set to 'scanning' already, so just update the location
-                locations_attr = self.mqtt.get_state(self.monitor_entity, attribute = 'locations')
-                if location not in locations_attr: #meaning it hadn't started the scan before
-                    locations_attr.append(location)
-                    self.mqtt.set_state(self.monitor_entity, attributes = {'locations': locations_attr, location : 'scanning'}) #update the location in the event of different scan systems in place
-
+        # Miscellaneous Actions, Discard
+        if action in ["depart", "arrive", "known device states",
+                      "add static device", "delete static device"]:
             return
 
-        elif topic.split('/')[-1] == 'end': #meaning a scan in a location just ended
-            location = payload['identity']
-            locations_attr = self.mqtt.get_state(self.monitor_entity, attribute = 'locations')
-            if location in locations_attr: #meaning it had started the scan before
-                locations_attr.remove(location)
-
-                if locations_attr == []: #meaning no more locations scanning
-                    self.mqtt.set_state(self.monitor_entity, state = 'idle', attributes = {'scan_type' : topic.split('/')[2], 'locations': [], location : 'idle'}) #set the monitor state to idle
-                else:
-                    self.mqtt.set_state(self.monitor_entity, attributes = {'locations': locations_attr, location : 'idle'}) #update the location in the event of different scan systems in place
+        # Status Message from the Presence System
+        if action == 'status':
+            self.handle_status(location=location, payload=payload)
             return
 
-        elif topic.split('/')[-1] == 'echo': #meaning it is for echo check
-            self.adbase.log(payload, level = "DEBUG")
-
-            if payload == "ok":
-                location = topic.split('/')[1]
-                siteId = location.replace(' ', '_').lower()
-                entity_id = "{}.{}".format(self.presence_topic, siteId)
-                if location in self.location_timers:
-                    self.adbase.cancel_timer(self.location_timers[location])
-
-                self.location_timers[location] = self.adbase.run_in(self.clear_location_entities, self.system_timeout, location = location)
-
-                if self.mqtt.get_state(entity_id, copy=False) == "Offline":
-                    self.mqtt.set_state(entity_id, state = "Online")
+        if action in ['start', 'end']:
+            self.handle_scanning(action=action,
+                                 location=location,
+                                 scan_type=topic_path[-2])
             return
 
-        location = topic.split('/')[1].replace('_',' ').title()
-        siteId = location.replace(' ', '_').lower()
-        device_name = topic.split('/')[2]
-        device_local = '{}_{}'.format(device_name, siteId)
+        # Response to Echo Check of Scanner
+        if action == 'echo':
+            self.handle_echo(location=location, payload=payload)
+            return
+
+        device_name = topic_path[2]
+        device_local = '{}_{}'.format(device_name, location)
         appdaemon_entity = '{}.{}'.format(self.presence_topic, device_local)
 
-        if topic.split('/')[-1] == 'rssi': #meaning its for rssi
-            self.mqtt.set_state(appdaemon_entity, attributes = attributes)
+        # RSSI Value for a Known Device:
+        if action == "rssi":
+            attributes = {"rssi": payload,
+                          "last_reported_by": location}
+            self.adbase.log("Recieved an RSSI of {} for {} from {}"
+                            .format(payload, device_name,
+                                    location_friendly),
+                            level="INFO")
+            self.mqtt.set_state(appdaemon_entity, attributes=attributes)
+            # TODO: Set a sensor within HASS for the RSSI value.
+            return
 
-        elif isinstance(payload, dict) and payload.get('type', None) in ['KNOWN_MAC', 'GENERIC_BEACON']:
-            friendly_name = payload.get('name', device_name)
-            payload["friendly_name"] = "{} {}".format(friendly_name, location)
+        if not payload_json or payload_json.get('type') not in \
+                ['KNOWN_MAC', 'GENERIC_BEACON']:
+            return
 
-            if hasattr(payload, 'name'):
-                del payload["name"]
+        friendly_name = payload_json.get('name', device_name)
+        payload_json["friendly_name"] = "{} {}".format(friendly_name,
+                                                       location_friendly)
 
-            confidence = int(float(payload['confidence']))
-            del payload['confidence']
+        if hasattr(payload_json, 'name'):
+            del payload_json["name"]
 
-            conf_sensor = 'sensor.{}'.format(device_local)
-            device_state = '{}_home'.format(device_name)
-            user_device_sensor = 'binary_sensor.{}'.format(device_state)
+        confidence = int(float(payload_json['confidence']))
+        del payload_json['confidence']
 
-            if confidence >= self.minimum_conf:
-                state = "on"
-            else:
-                state = "off"
+        conf_sensor = 'sensor.{}'.format(device_local)
+        conf_sensor_friendly = "{} {} Confidence". \
+            format(friendly_name, location_friendly)
+        device_state = '{}_home'.format(device_name)
+        user_device_sensor = 'binary_sensor.{}'.format(device_state)
+        state = "on" if confidence >= self.minimum_conf else "off"
 
-            if not self.hass.entity_exists(conf_sensor): #meaning it doesn't exist
-                self.adbase.log('Creating sensor {!r} for Confidence'.format(conf_sensor))
-                self.hass.set_state(conf_sensor, state = confidence, attributes = {"friendly_name" : "{} {} Confidence".format(friendly_name, location)}) #create sensor for confidence
+        if not self.hass.entity_exists(conf_sensor):
+            # Entity does not exist in HASS yet.
+            self.adbase.log('Creating sensor {!r} for Confidence'
+                            .format(conf_sensor))
+            self.hass.set_state(conf_sensor, state=None,
+                                attributes={
+                                    "friendly_name": conf_sensor_friendly})
 
-                '''create user home state sensor'''
-                if not self.hass.entity_exists(user_device_sensor): #meaning it doesn't exist.
-                    self.adbase.log('Creating sensor {!r} for Home State'.format(user_device_sensor))
+        if not self.hass.entity_exists(user_device_sensor):
+            # Device Home Presence Sensor Doesn't Exist Yet
+            self.adbase.log('Creating sensor {!r} for Home State'
+                            .format(user_device_sensor),
+                            level="DEBUG")
+            self.hass.set_state(
+                user_device_sensor, state=state,
+                attributes={"friendly_name": "{} Home".format(friendly_name),
+                            "device_class": "presence"})
 
-                    self.hass.set_state(user_device_sensor, state = state, attributes = {"friendly_name" : "{} Home".format(friendly_name), "device_class" : "presence"}) #create device sensor
+        if device_state not in self.home_state_entities:
+            self.home_state_entities[device_state] = list()
 
-                    if state == "on" and self.hass.get_state(self.somebody_is_home, copy=False) == "off": #at least someone is home
-                        self.update_hass_sensor(self.somebody_is_home, "on")
+        if conf_sensor not in self.home_state_entities[device_state]:
+            self.home_state_entities[device_state].append(conf_sensor)
+            self.hass.listen_state(self.confidence_updated,
+                                   conf_sensor,
+                                   device_state=device_state,
+                                   immediate=True)
 
-                self.hass.listen_state(self.confidence_updated, conf_sensor, device_state = device_state, immediate = True) #process the change immedaitely
+        self.update_hass_sensor(conf_sensor, confidence)
 
-                if device_state not in self.home_state_entities:
-                    self.home_state_entities[device_state] = list()
+        payload_json["location"] = location
+        self.mqtt.set_state(appdaemon_entity,
+                            state=confidence,
+                            attributes=payload_json)
 
-                if conf_sensor not in self.home_state_entities[device_state]: #not really needed, but noting wrong in being extra careful
-                    self.home_state_entities[device_state].append(conf_sensor)
+        if user_device_sensor not in self.all_users_sensors:
+            self.all_users_sensors.append(user_device_sensor)
 
-            else:
-                if device_state not in self.home_state_entities:
-                    self.home_state_entities[device_state] = list()
+        if device_state not in self.not_home_timers:
+            self.not_home_timers[device_state] = None
 
-                if conf_sensor not in self.home_state_entities[device_state]:
-                    self.home_state_entities[device_state].append(conf_sensor)
-                    self.hass.listen_state(self.confidence_updated, conf_sensor, device_state = device_state, immediate = True)
+    def handle_status(self, location, payload):
+        """Handle a status message from the presence system."""
+        location_friendly = location.replace('_', ' ').title()
+        self.adbase.log('The Presence System in the {} is {}'
+                        .format(location_friendly, payload.title()),
+                        level="DEBUG")
 
-                self.update_hass_sensor(conf_sensor, confidence)
+        if payload == 'offline':
+            # Location Offline, Run Timer to Clear All Entities
+            if location in self.location_timers:
+                self.adbase.cancel_timer(self.location_timers[location])
 
-                #if state == "on" and self.hass.entity_exists(user_device_sensor) and self.hass.get_state(user_device_sensor, copy=False) != state: #meaning it exist but state not right.
-                #    self.update_hass_sensor(user_device_sensor, state)
+            self.location_timers[location] = \
+                self.adbase.run_in(self.clear_location_entities,
+                                   self.system_timeout,
+                                   location=location)
+        elif payload == 'online' and location in self.location_timers:
+            # Location back online. Cancel any timers.
+            self.adbase.cancel_timer(self.location_timers[location])
 
-            #add location to payload, so its available in the AD entity's data
-            payload["location"] = location #good when writing app to triagulate location
-            self.mqtt.set_state(appdaemon_entity, state = confidence, attributes = payload)
+        entity_id = "{}.{}".format(self.presence_topic, location)
+        attributes = {}
 
-            if user_device_sensor not in self.all_users_sensors:
-                self.all_users_sensors.append(user_device_sensor)
+        if not self.mqtt.entity_exists(entity_id):
+            attributes.update({"friendly_name": location_friendly})
+            # Load devices for all locations:
+            self.adbase.run_in(self.load_known_devices, 30)
 
-            if device_state not in self.not_home_timers:
-                self.not_home_timers[device_state] = None
+        self.mqtt.set_state(entity_id, state=payload,
+                            attributes=attributes)
+
+        if self.system_handle.get(entity_id) is None:
+            self.system_handle[entity_id] = \
+                self.mqtt.listen_state(self.system_state_changed,
+                                       entity_id,
+                                       old="offline", new="online")
+
+    def handle_scanning(self, action, location, scan_type):
+        """Handle a Monitor location starting or stopping a scan."""
+        old_state = self.mqtt.get_state(self.monitor_entity, copy=False)
+        locations_attr = self.mqtt.get_state(self.monitor_entity,
+                                             attribute='locations')
+        new_state = 'scanning' if action == 'start' else 'idle'
+        attributes = {'scan_type': scan_type,
+                      'locaitons': locations_attr,
+                      location: new_state}
+
+        if action == 'start':
+            self.adbase.log("The system in the {} is scanning"
+                            .format(location), level="DEBUG")
+            if old_state != 'scanning':
+                # Scanner was IDLE. Set it to SCANNING.
+                attributes['locations'] = [location]
+            elif location not in locations_attr:
+                attributes['locations'].append(location)
+        # Scan has just finished.
+        elif action == 'end' and location in locations_attr:
+            attributes['locations'].remove(location)
+        last_one = old_state != new_state and not attributes['locations']
+
+        self.mqtt.set_state(self.monitor_entity,
+                            state='scanning' if not last_one else 'idle',
+                            attributes=attributes)
+
+    def handle_echo(self, location, payload):
+        """Handle an echo response from a scanner."""
+        self.adbase.log("Echo received from {}: {}"
+                        .format(location, payload),
+                        level="DEBUG")
+        if payload != "ok":
+            return
+        entity_id = "{}.{}".format(self.presence_topic, location)
+        if location in self.location_timers:
+            self.adbase.cancel_timer(self.location_timers[location])
+
+        self.location_timers[location] = \
+            self.adbase.run_in(self.clear_location_entities,
+                               self.system_timeout,
+                               location=location)
+        if self.mqtt.get_state(entity_id, copy=False) == "offline":
+            self.mqtt.set_state(entity_id, state="online")
 
     def confidence_updated(self, entity, attribute, old, new, kwargs):
         device_state = kwargs['device_state']

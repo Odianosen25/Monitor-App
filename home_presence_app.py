@@ -26,6 +26,7 @@ class HomePresenceApp(ad.ADBase):
         self.mqtt = self.get_plugin_api("MQTT")
 
         self.presence_topic = self.args.get('monitor_topic', 'presence')
+        self.topic_level = len(self.presence_topic.split('/'))
         self.timeout = self.args.get('not_home_timeout', 30)
         self.minimum_conf = self.args.get('minimum_confidence', 90)
         self.depart_check_time = self.args.get('depart_check_time', 30)
@@ -47,14 +48,16 @@ class HomePresenceApp(ad.ADBase):
                 attributes={'locations': []},
                 replace=True)
 
+        # Listen for requests to scan immediately.
         self.mqtt.listen_state(self.monitor_scan_now,
                                self.monitor_entity,
                                new='scan')
-
         self.monitor_handlers = {self.monitor_entity: None}
 
+        # Setup the Everybody Home/Not Home Group Sensors
         self.setup_global_sensors()
 
+        # Initialize our timer variables
         self.gateway_timer = None
         self.motion_timer = None
 
@@ -70,6 +73,7 @@ class HomePresenceApp(ad.ADBase):
         # time = "00:00:01"
         # self.adbase.run_daily(self.restart_device, time)
 
+        # Setup the system checks.
         if self.system_timeout > system_check:
             time = datetime.datetime.now() + datetime.timedelta(seconds=1)
             topic = "{}/echo".format(self.presence_topic)
@@ -80,11 +84,16 @@ class HomePresenceApp(ad.ADBase):
                             " being Lower than System Check in Seconds",
                             level="WARNING")
 
+        # Setup primary MQTT Listener for all presence messages.
         self.mqtt.listen_event(
             self.presence_message,
             'MQTT_MESSAGE',
             wildcard='{}/#'.format(self.presence_topic))
+
+        # Listen for any HASS restarts
         self.hass.listen_event(self.hass_restarted, 'plugin_restarted')
+
+        # Load the devices from the config.
         self.adbase.run_in(self.reload_device_state, 5)
         self.adbase.run_in(self.load_known_devices, 0)
 
@@ -97,44 +106,32 @@ class HomePresenceApp(ad.ADBase):
         self.somebody_is_home = "binary_sensor.{}".format(
             self.args.get('somebody_is_home', 'somebody_is_home'))
 
-        if not self.hass.entity_exists(self.everyone_not_home):
-            self.adbase.log("Creating Binary Sensor for "
-                            "Everyone Not Home State")
-            attributes = {
-                'friendly_name': "Everyone Not Home",
-                'device_class': 'presence'
-            }
-            self.hass.set_state(
-                self.everyone_not_home, state='off', attributes=attributes)
+        self.create_global_sensor(self.everyone_not_home)
+        self.create_global_sensor(self.everyone_home)
+        self.create_global_sensor(self.somebody_is_home)
 
-        if not self.hass.entity_exists(self.everyone_home):
-            self.adbase.log("Creating Binary Sensor for Everyone Home State")
-            attributes = {
-                'friendly_name': "Everyone Home",
-                'device_class': 'presence'
-            }
-            self.hass.set_state(
-                self.everyone_home, state='off', attributes=attributes)
+    def create_global_sensor(self, sensor):
+        """Create a global sensor in HASS if it does not exist."""
+        if self.hass.entity_exists(sensor):
+            return
 
-        if not self.hass.entity_exists(self.somebody_is_home):
-            self.adbase.log("Creating Binary Sensor for Somebody is Home")
-            attributes = {
-                'friendly_name': "Somebody is Home State",
-                'device_class': 'presence'
-            }
-            self.hass.set_state(
-                self.somebody_is_home, state='off', attributes=attributes)
+        self.adbase.log("Creating Binary Sensor for Everyone Home State")
+        attributes = {
+            'friendly_name': sensor.replace("_", " ").title(),
+            'device_class': 'presence'
+        }
+        self.hass.set_state(sensor, state='off', attributes=attributes)
 
     def presence_message(self, event_name, data, **kwargs):
         """Process a message sent on the MQTT Topic."""
-        topic = data['topic']
-        payload = data['payload']
+        topic = data.get('topic')
+        payload = data.get('payload')
         self.adbase.log("{} payload: {}".format(topic, payload), level='DEBUG')
 
         topic_path = topic.split('/')
         action = topic_path[-1].lower()
 
-        # Process the payload
+        # Process the payload as JSON if it is JSON
         payload_json = {}
         try:
             payload_json = json.loads(payload)
@@ -145,8 +142,8 @@ class HomePresenceApp(ad.ADBase):
         location = 'unknown'
         if 'identity' in payload_json:
             location = payload_json.get('identity', 'unknown')
-        elif len(topic_path) > 2:
-            location = topic_path[1]
+        elif len(topic_path) > self.topic_level + 1:
+            location = topic_path[self.topic_level]
         location = location.replace(' ', '_').lower()
         location_friendly = location.replace('_', ' ').title()
 
@@ -169,7 +166,7 @@ class HomePresenceApp(ad.ADBase):
         if action in ['start', 'end']:
             self.handle_scanning(action=action,
                                  location=location,
-                                 scan_type=topic_path[-2])
+                                 scan_type=topic_path[self.topic_level + 1])
             return
 
         # Response to Echo Check of Scanner
@@ -177,7 +174,7 @@ class HomePresenceApp(ad.ADBase):
             self.handle_echo(location=location, payload=payload)
             return
 
-        device_name = topic_path[2]
+        device_name = topic_path[self.topic_level + 1]
         device_local = '{}_{}'.format(device_name, location)
         appdaemon_entity = '{}.{}'.format(self.presence_topic, device_local)
 

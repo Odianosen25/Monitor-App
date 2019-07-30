@@ -53,12 +53,6 @@ class HomePresenceApp(ad.ADBase):
 
         self.monitor_handlers = {self.monitor_entity: None}
 
-        self.everyone_not_home = "binary_sensor.{}".format(
-            self.args.get('everyone_not_home', 'everyone_not_home'))
-        self.everyone_home = "binary_sensor.{}".format(
-            self.args.get('everyone_home', 'everyone_home'))
-        self.somebody_is_home = "binary_sensor.{}".format(
-            self.args.get('somebody_is_home', 'somebody_is_home'))
         self.setup_global_sensors()
 
         self.gateway_timer = None
@@ -93,6 +87,43 @@ class HomePresenceApp(ad.ADBase):
         self.hass.listen_event(self.hass_restarted, 'plugin_restarted')
         self.adbase.run_in(self.reload_device_state, 5)
         self.adbase.run_in(self.load_known_devices, 0)
+
+    def setup_global_sensors(self):
+        """Add all global home/not_home sensors."""
+        self.everyone_not_home = "binary_sensor.{}".format(
+            self.args.get('everyone_not_home', 'everyone_not_home'))
+        self.everyone_home = "binary_sensor.{}".format(
+            self.args.get('everyone_home', 'everyone_home'))
+        self.somebody_is_home = "binary_sensor.{}".format(
+            self.args.get('somebody_is_home', 'somebody_is_home'))
+
+        if not self.hass.entity_exists(self.everyone_not_home):
+            self.adbase.log("Creating Binary Sensor for "
+                            "Everyone Not Home State")
+            attributes = {
+                'friendly_name': "Everyone Not Home",
+                'device_class': 'presence'
+            }
+            self.hass.set_state(
+                self.everyone_not_home, state='off', attributes=attributes)
+
+        if not self.hass.entity_exists(self.everyone_home):
+            self.adbase.log("Creating Binary Sensor for Everyone Home State")
+            attributes = {
+                'friendly_name': "Everyone Home",
+                'device_class': 'presence'
+            }
+            self.hass.set_state(
+                self.everyone_home, state='off', attributes=attributes)
+
+        if not self.hass.entity_exists(self.somebody_is_home):
+            self.adbase.log("Creating Binary Sensor for Somebody is Home")
+            attributes = {
+                'friendly_name': "Somebody is Home State",
+                'device_class': 'presence'
+            }
+            self.hass.set_state(
+                self.somebody_is_home, state='off', attributes=attributes)
 
     def presence_message(self, event_name, data, **kwargs):
         """Process a message sent on the MQTT Topic."""
@@ -312,12 +343,14 @@ class HomePresenceApp(ad.ADBase):
         """Respond to a monitor providing a new confidence value."""
         device_state = kwargs['device_state']
         user_device_sensor = 'binary_sensor.{}'.format(device_state)
+        uds_state = self.hass.get_state(user_device_sensor, copy=False)
         user_conf_sensors = self.home_state_entities.get(device_state)
 
         if user_conf_sensors is None:
             self.adbase.log("Got Confidence Value for {} but device"
                             " is not set up (no sensors found)."
                             .format(device_state), level="WARNING")
+            return
 
         sensor_res = list(map(lambda x: self.hass.get_state(x, copy=False),
                               user_conf_sensors))
@@ -333,37 +366,32 @@ class HomePresenceApp(ad.ADBase):
                 self.not_home_timers[device_state] = None
 
             self.update_hass_sensor(user_device_sensor, 'on')
-
-            if self.hass.get_state(self.somebody_is_home, copy=False) == 'off':
-                self.update_hass_sensor(self.somebody_is_home, 'on')
+            self.update_hass_sensor(self.somebody_is_home, 'on')
 
             if user_device_sensor in self.all_users_sensors:
-                #check if everyone home
-                if self.hass.get_state(
-                        self.everyone_not_home, copy=False) == 'on':
-                    self.update_hass_sensor(self.everyone_not_home, 'off')
-
+                self.update_hass_sensor(self.everyone_not_home, 'off')
                 self.adbase.run_in(
                     self.check_home_state, 2, check_state='is_home')
+            return
 
-        else:
-            self.adbase.log(
-                "Device State: {}, User Device Sensor: {}, New: {}, State: {}".
-                format(device_state, user_device_sensor, new,
-                       self.hass.get_state(user_device_sensor, copy=False)),
-                level='DEBUG')
-            if self.not_home_timers[
-                    device_state] is None and self.hass.get_state(
-                        user_device_sensor,
-                        copy=False) != 'off' and int(new) == 0:
-                self.run_arrive_scan()
-                #run so it does another scan before declaring the user away as extra check within the timeout time
-                self.not_home_timers[device_state] = self.adbase.run_in(
-                    self.not_home_func,
-                    self.timeout,
-                    device_state=device_state)
-                self.adbase.log(
-                    "Timer Started for {}".format(device_state), level='DEBUG')
+        self.adbase.log(
+            "Device State: {}, User Device Sensor: {}, New: {}, State: {}".
+            format(device_state, user_device_sensor, new, uds_state),
+            level='DEBUG')
+
+        if self.not_home_timers[device_state] is None and \
+                uds_state != 'off' and int(new) == 0:
+
+            # Run another scan before declaring the user away as extra
+            # check within the timeout time
+            self.run_arrive_scan()
+
+            self.not_home_timers[device_state] = self.adbase.run_in(
+                self.not_home_func,
+                self.timeout,
+                device_state=device_state)
+            self.adbase.log("Timer Started for {}"
+                            .format(device_state), level='DEBUG')
 
     def not_home_func(self, **kwargs):
         """Manage devices that are not home."""
@@ -499,9 +527,7 @@ class HomePresenceApp(ad.ADBase):
             self.update_hass_sensor(self.everyone_not_home, 'on')
             somebody_home = 'off'
 
-        if self.hass.get_state(self.somebody_is_home, copy=False) \
-                != somebody_home:
-            self.update_hass_sensor(self.somebody_is_home, somebody_home)
+        self.update_hass_sensor(self.somebody_is_home, somebody_home)
 
     def reload_device_state(self, **kwargs):
         """Get the latest states from the scanners."""
@@ -637,60 +663,26 @@ class HomePresenceApp(ad.ADBase):
 
     def load_known_devices(self, **kwargs):
         """Request all known devices in config to be added to monitors."""
-        topic = "{}/setup/ADD STATIC DEVICE".format(self.presence_topic)
         timer = 0
         for device in self.args["known_devices"]:
-            payload = device
             self.adbase.run_in(
                 self.send_mqtt_message,
                 timer,
-                topic=topic,
-                payload=payload,
+                topic="{}/setup/ADD STATIC DEVICE".format(self.presence_topic),
+                payload=device,
                 scan_type="System")
             timer += 15
 
     def remove_known_device(self, **kwargs):
         """Request all known devices in config to be deleted from monitors."""
-        device = kwargs["device"]
-        topic = "{}/setup/DELETE STATIC DEVICE".format(self.presence_topic)
         self.adbase.run_in(
             self.send_mqtt_message,
             0,
-            topic=topic,
-            payload=device,
+            topic="{}/setup/DELETE STATIC DEVICE".format(self.presence_topic),
+            payload=kwargs["device"],
             scan_type="System")
 
     def hass_restarted(self, event, data, **kwargs):
         """Respond to a HASS Restart."""
         self.setup_global_sensors()
         self.adbase.run_in(self.reload_device_state, 10)
-
-    def setup_global_sensors(self):
-        """Add all global home/not_home sensors."""
-        if not self.hass.entity_exists(self.everyone_not_home):
-            self.adbase.log("Creating Binary Sensor for "
-                            "Everyone Not Home State")
-            attributes = {
-                'friendly_name': "Everyone Not Home",
-                'device_class': 'presence'
-            }
-            self.hass.set_state(
-                self.everyone_not_home, state='off', attributes=attributes)
-
-        if not self.hass.entity_exists(self.everyone_home):
-            self.adbase.log("Creating Binary Sensor for Everyone Home State")
-            attributes = {
-                'friendly_name': "Everyone Home",
-                'device_class': 'presence'
-            }
-            self.hass.set_state(
-                self.everyone_home, state='off', attributes=attributes)
-
-        if not self.hass.entity_exists(self.somebody_is_home):
-            self.adbase.log("Creating Binary Sensor for Somebody is Home")
-            attributes = {
-                'friendly_name': "Somebody is Home State",
-                'device_class': 'presence'
-            }
-            self.hass.set_state(
-                self.somebody_is_home, state='off', attributes=attributes)

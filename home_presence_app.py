@@ -198,7 +198,7 @@ class HomePresenceApp(ad.ADBase):
         payload_json['friendly_name'] = "{} {}".format(friendly_name,
                                                        location_friendly)
 
-        if hasattr(payload_json, 'name'):
+        if 'name' in payload_json:
             del payload_json['name']
 
         confidence = int(float(payload_json['confidence']))

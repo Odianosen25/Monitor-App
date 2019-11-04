@@ -1,7 +1,7 @@
 home_presence_app:
   module: home_presence_app
   class: HomePresenceApp
-  plugin: 
+  plugin:
     - HASS
     - MQTT
   monitor_topic: presence
@@ -16,7 +16,9 @@ home_presence_app:
     - binary_sensor.motion_sensor_occupancy_1
     - binary_sensor.motion_sensor_occupancy_2
     - binary_sensor.hallway_motion_sensor_occupancy
-
+  everyone_not_home: everyone_not_home
+  everyone_home: everyone_home
+  somebody_is_home: somebody_is_home
   #pin_app: True
   #pin_thread: 3
   #log: apps_log

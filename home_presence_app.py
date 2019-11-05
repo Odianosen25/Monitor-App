@@ -9,6 +9,7 @@ apps.yaml parameters:
 | - everyone_not_home: Name to use for the "Everyone Not Home" Sensor
 | - everyone_home: Name to use for the "Everyone Home" Sensor
 | - somebody_is_home: Name to use for the "Somebody Is Home" Sensor
+| - user_device_domain: Use "binary_sensor" or "device_tracker" domains.
 """
 import json
 import datetime
@@ -420,7 +421,7 @@ class HomePresenceApp(ad.ADBase):
     def not_home_func(self, kwargs):
         """Manage devices that are not home."""
         device_state = kwargs.get("device_state")
-        user_device_sensor = "binary_sensor." + device_state
+        user_device_sensor = f"{self.user_device_domain}.{device_state}"
         user_conf_sensors = self.home_state_entities[device_state]
         sensor_res = list(
             map(lambda x: self.hass.get_state(x, copy=False), user_conf_sensors)
@@ -509,7 +510,6 @@ class HomePresenceApp(ad.ADBase):
         elif self.hass.get_state(self.everyone_home, copy=False) == "on":
             # everyone at home
             self.run_depart_scan()
-
         else:
             self.run_arrive_scan()
             self.run_depart_scan()

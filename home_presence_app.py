@@ -134,7 +134,9 @@ class HomePresenceApp(ad.ADBase):
             "friendly_name": sensor.replace("_", " ").title(),
             "device_class": "presence",
         }
-        self.hass.set_state(f"binary_sensor.{sensor}", state="off", attributes=attributes)
+        self.hass.set_state(
+            f"binary_sensor.{sensor}", state="off", attributes=attributes
+        )
 
     def presence_message(self, event_name, data, kwargs):
         """Process a message sent on the MQTT Topic."""
@@ -538,7 +540,9 @@ class HomePresenceApp(ad.ADBase):
         user_res = [i for i in user_res if i is not None and i != "unknown"]
         somebody_home = "on"
 
-        if check_state == "is_home" and all(list(map(lambda x: x in ["on","home"], user_res))):
+        if check_state == "is_home" and all(
+            list(map(lambda x: x in ["on", "home"], user_res))
+        ):
             # Someone is home, check if everyone is home.
             self.update_hass_sensor(self.everyone_home, "on")
         elif check_state == "not_home" and all(

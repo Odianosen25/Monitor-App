@@ -1,6 +1,7 @@
 """AppDaemon App For use with Monitor Bluetooth Presence Detection Script.
 
 apps.yaml parameters:
+| - monitor_topic (default 'presence'): MQTT Topic monitor.sh script publishes to
 | - not_home_timeout (default 30s): Time interval before declaring not home
 | - minimum_confidence (default 90): Minimum Confidence Level to consider home
 | - depart_check_time (default 30s): Time to wait before running depart scan
@@ -28,11 +29,17 @@ class HomePresenceApp(ad.ADBase):
 
         self.presence_topic = self.args.get("monitor_topic", "presence")
         self.user_device_domain = self.args.get("user_device_domain", "binary_sensor")
+
+        # State string to use depends on which domain is in use.
         self.state_true = "on" if self.user_device_domain == "binary_sensor" else "home"
         self.state_false = (
             "off" if self.user_device_domain == "binary_sensor" else "not_home"
         )
+
+        # Support nested presence topics (e.g. "hass/monitor")
         self.topic_level = len(self.presence_topic.split("/"))
+        self.presence_name = self.presence_topic.split("/")[-1]
+
         self.timeout = self.args.get("not_home_timeout", 30)
         self.minimum_conf = self.args.get("minimum_confidence", 90)
         self.depart_check_time = self.args.get("depart_check_time", 30)
@@ -46,7 +53,7 @@ class HomePresenceApp(ad.ADBase):
         self.system_handle = dict()
 
         # Create a sensor to keep track of if the monitor is busy or not.
-        self.monitor_entity = f"{self.presence_topic}.monitor_state"
+        self.monitor_entity = f"{self.presence_name}.monitor_state"
         if not self.mqtt.entity_exists(self.monitor_entity):
             self.mqtt.set_state(
                 self.monitor_entity,
@@ -101,6 +108,7 @@ class HomePresenceApp(ad.ADBase):
         self.mqtt.listen_event(
             self.presence_message, "MQTT_MESSAGE", wildcard=f"{self.presence_topic}/#"
         )
+        self.adbase.log(f"Listening on MQTT Topic {self.presence_topic}", level="DEBUG")
 
         # Listen for any HASS restarts
         self.hass.listen_event(self.hass_restarted, "plugin_restarted")
@@ -129,7 +137,7 @@ class HomePresenceApp(ad.ADBase):
         if self.hass.entity_exists(f"binary_sensor.{sensor}"):
             return
 
-        self.adbase.log("Creating Binary Sensor for Everyone Home State")
+        self.adbase.log(f"Creating Binary Sensor for {sensor}", level='DEBUG')
         attributes = {
             "friendly_name": sensor.replace("_", " ").title(),
             "device_class": "presence",
@@ -198,7 +206,7 @@ class HomePresenceApp(ad.ADBase):
 
         device_name = topic_path[self.topic_level + 1]
         device_local = f"{device_name}_{location}"
-        appdaemon_entity = f"{self.presence_topic}.{device_local}"
+        appdaemon_entity = f"{self.presence_name}.{device_local}"
 
         # RSSI Value for a Known Device:
         if action == "rssi":
@@ -301,7 +309,7 @@ class HomePresenceApp(ad.ADBase):
             # Location back online. Cancel any timers.
             self.adbase.cancel_timer(self.location_timers[location])
 
-        entity_id = f"{self.presence_topic}.{location}"
+        entity_id = f"{self.presence_name}.{location}"
         attributes = {}
 
         if not self.mqtt.entity_exists(entity_id):
@@ -352,7 +360,7 @@ class HomePresenceApp(ad.ADBase):
         self.adbase.log(f"Echo received from {location}: {payload}", level="DEBUG")
         if payload != "ok":
             return
-        entity_id = f"{self.presence_topic}.{location}"
+        entity_id = f"{self.presence_name}.{location}"
         if location in self.location_timers:
             self.adbase.cancel_timer(self.location_timers[location])
 
@@ -652,13 +660,13 @@ class HomePresenceApp(ad.ADBase):
                 if location in sensor:  # that sensor belongs to that location
                     self.update_hass_sensor(sensor, 0)
                     device_local = sensor.replace("sensor.", "")
-                    appdaemon_entity = f"{self.presence_topic}.{device_local}"
+                    appdaemon_entity = f"{self.presence_name}.{device_local}"
                     self.mqtt.set_state(appdaemon_entity, state=0, rssi="-99")
 
         if location in self.location_timers:
             self.location_timers.pop(location)
 
-        entity_id = f"{self.presence_topic}.{location}"
+        entity_id = f"{self.presence_name}.{location}"
         self.mqtt.set_state(entity_id, state="Offline")
 
     def system_state_changed(self, entity, attribute, old, new, kwargs):

@@ -111,23 +111,22 @@ class HomePresenceApp(ad.ADBase):
 
     def setup_global_sensors(self):
         """Add all global home/not_home sensors."""
-        self.everyone_not_home = "binary_sensor.{}".format(
-            self.args.get("everyone_not_home", "everyone_not_home")
-        )
-        self.everyone_home = "binary_sensor.{}".format(
-            self.args.get("everyone_home", "everyone_home")
-        )
-        self.somebody_is_home = "binary_sensor.{}".format(
-            self.args.get("somebody_is_home", "somebody_is_home")
-        )
+        everyone_not_home = self.args.get("everyone_not_home", "everyone_not_home")
+        self.everyone_not_home = f"binary_sensor.{everyone_not_home}"
 
-        self.create_global_sensor(self.everyone_not_home)
-        self.create_global_sensor(self.everyone_home)
-        self.create_global_sensor(self.somebody_is_home)
+        everyone_home = self.args.get("everyone_home", "everyone_home")
+        self.everyone_home = f"binary_sensor.{everyone_home}"
+
+        somebody_is_home = self.args.get("somebody_is_home", "somebody_is_home")
+        self.somebody_is_home = f"binary_sensor.{somebody_is_home}"
+
+        self.create_global_sensor(everyone_not_home)
+        self.create_global_sensor(everyone_home)
+        self.create_global_sensor(somebody_is_home)
 
     def create_global_sensor(self, sensor):
         """Create a global sensor in HASS if it does not exist."""
-        if self.hass.entity_exists(sensor):
+        if self.hass.entity_exists(f"binary_sensor.{sensor}"):
             return
 
         self.adbase.log("Creating Binary Sensor for Everyone Home State")
@@ -135,7 +134,7 @@ class HomePresenceApp(ad.ADBase):
             "friendly_name": sensor.replace("_", " ").title(),
             "device_class": "presence",
         }
-        self.hass.set_state(sensor, state="off", attributes=attributes)
+        self.hass.set_state(f"binary_sensor.{sensor}", state="off", attributes=attributes)
 
     def presence_message(self, event_name, data, kwargs):
         """Process a message sent on the MQTT Topic."""
@@ -441,7 +440,6 @@ class HomePresenceApp(ad.ADBase):
             if user_device_sensor in self.all_users_sensors:
                 # At least someone not home, set Everyone Home to off
                 self.update_hass_sensor(self.everyone_home, "off")
-
                 self.adbase.run_in(self.check_home_state, 2, check_state="not_home")
 
         self.not_home_timers[device_state] = None
@@ -540,7 +538,7 @@ class HomePresenceApp(ad.ADBase):
         user_res = [i for i in user_res if i is not None and i != "unknown"]
         somebody_home = "on"
 
-        if check_state == "is_home" and all(list(map(lambda x: x == "on", user_res))):
+        if check_state == "is_home" and all(list(map(lambda x: x in ["on","home"], user_res))):
             # Someone is home, check if everyone is home.
             self.update_hass_sensor(self.everyone_home, "on")
         elif check_state == "not_home" and all(

@@ -205,8 +205,8 @@ class HomePresenceApp(ad.ADBase):
             return
 
         device_name = topic_path[self.topic_level + 1]
-        device_local = f"{device_name}_{location}"
-        appdaemon_entity = f"{self.presence_name}.{device_local}"
+        device_entity_prefix = f"{self.presence_name}_{location}_{device_name}"
+        appdaemon_entity = f"{self.presence_name}.{device_entity_prefix}"
 
         # RSSI Value for a Known Device:
         if action == "rssi":
@@ -234,16 +234,16 @@ class HomePresenceApp(ad.ADBase):
         confidence = int(float(payload_json["confidence"]))
         del payload_json["confidence"]
 
-        conf_sensor = f"sensor.{device_local}"
-        device_state = f"{device_name}_home"
-        user_device_sensor = f"{self.user_device_domain}.{device_state}"
+        device_conf_sensor = f"sensor.{device_entity_prefix}_conf"
+        device_entity_id = f"{self.presence_name}_{device_name}"
+        device_state_sensor = f"{self.user_device_domain}.{device_entity_id}"
         state = self.state_true if confidence >= self.minimum_conf else self.state_false
 
-        if not self.hass.entity_exists(conf_sensor):
+        if not self.hass.entity_exists(device_conf_sensor):
             # Entity does not exist in HASS yet.
-            self.adbase.log("Creating sensor {!r} for Confidence".format(conf_sensor))
+            self.adbase.log("Creating sensor {!r} for Confidence".format(device_conf_sensor))
             self.hass.set_state(
-                conf_sensor,
+                device_conf_sensor,
                 state="unknown",
                 attributes={
                     "friendly_name": f"{friendly_name} {location_friendly} Confidence",
@@ -251,14 +251,14 @@ class HomePresenceApp(ad.ADBase):
                 },
             )
 
-        if not self.hass.entity_exists(user_device_sensor):
+        if not self.hass.entity_exists(device_state_sensor):
             # Device Home Presence Sensor Doesn't Exist Yet
             self.adbase.log(
-                "Creating sensor {!r} for Home State".format(user_device_sensor),
+                "Creating sensor {!r} for Home State".format(device_state_sensor),
                 level="DEBUG",
             )
             self.hass.set_state(
-                user_device_sensor,
+                device_state_sensor,
                 state=state,
                 attributes={
                     "friendly_name": f"{friendly_name} Home",
@@ -266,28 +266,28 @@ class HomePresenceApp(ad.ADBase):
                 },
             )
 
-        if device_state not in self.home_state_entities:
-            self.home_state_entities[device_state] = list()
+        if device_entity_id not in self.home_state_entities:
+            self.home_state_entities[device_entity_id] = list()
 
-        if conf_sensor not in self.home_state_entities[device_state]:
-            self.home_state_entities[device_state].append(conf_sensor)
+        if device_conf_sensor not in self.home_state_entities[device_entity_id]:
+            self.home_state_entities[device_entity_id].append(device_conf_sensor)
             self.hass.listen_state(
                 self.confidence_updated,
-                conf_sensor,
-                device_state=device_state,
+                device_conf_sensor,
+                device_entity_id=device_entity_id,
                 immediate=True,
             )
 
-        self.update_hass_sensor(conf_sensor, confidence)
+        self.update_hass_sensor(device_conf_sensor, confidence)
 
         payload_json["location"] = location
         self.mqtt.set_state(appdaemon_entity, state=confidence, attributes=payload_json)
 
-        if user_device_sensor not in self.all_users_sensors:
-            self.all_users_sensors.append(user_device_sensor)
+        if device_state_sensor not in self.all_users_sensors:
+            self.all_users_sensors.append(device_state_sensor)
 
-        if device_state not in self.not_home_timers:
-            self.not_home_timers[device_state] = None
+        if device_entity_id not in self.not_home_timers:
+            self.not_home_timers[device_entity_id] = None
 
     def handle_status(self, location, payload):
         """Handle a status message from the presence system."""
@@ -372,21 +372,21 @@ class HomePresenceApp(ad.ADBase):
 
     def confidence_updated(self, entity, attribute, old, new, kwargs):
         """Respond to a monitor providing a new confidence value."""
-        device_state = kwargs["device_state"]
-        user_device_sensor = f"{self.user_device_domain}.{device_state}"
-        uds_state = self.hass.get_state(user_device_sensor, copy=False)
-        user_conf_sensors = self.home_state_entities.get(device_state)
+        device_entity_id = kwargs["device_entity_id"]
+        device_state_sensor = f"{self.user_device_domain}.{device_entity_id}"
+        device_state_sensor_value = self.hass.get_state(device_state_sensor, copy=False)
+        device_conf_sensors = self.home_state_entities.get(device_entity_id)
 
-        if user_conf_sensors is None:
+        if device_conf_sensors is None:
             self.adbase.log(
-                f"Got Confidence Value for {device_state} but device"
+                f"Got Confidence Value for {device_entity_id} but device"
                 " is not set up (no sensors found).",
                 level="WARNING",
             )
             return
 
         sensor_res = list(
-            map(lambda x: self.hass.get_state(x, copy=False), user_conf_sensors)
+            map(lambda x: self.hass.get_state(x, copy=False), device_conf_sensors)
         )
         sensor_res = [i for i in sensor_res if i is not None and i != "unknown"]
 
@@ -394,28 +394,28 @@ class HomePresenceApp(ad.ADBase):
             list(map(lambda x: int(x) >= self.minimum_conf, sensor_res))
         ):
             # Cancel the running timer.
-            if self.not_home_timers[device_state] is not None:
-                self.adbase.cancel_timer(self.not_home_timers[device_state])
-                self.not_home_timers[device_state] = None
+            if self.not_home_timers[device_entity_id] is not None:
+                self.adbase.cancel_timer(self.not_home_timers[device_entity_id])
+                self.not_home_timers[device_entity_id] = None
 
-            self.update_hass_sensor(user_device_sensor, self.state_true)
+            self.update_hass_sensor(device_state_sensor, self.state_true)
             self.update_hass_sensor(self.somebody_is_home, "on")
 
-            if user_device_sensor in self.all_users_sensors:
+            if device_state_sensor in self.all_users_sensors:
                 self.update_hass_sensor(self.everyone_not_home, "off")
                 self.adbase.run_in(self.check_home_state, 2, check_state="is_home")
             return
 
         self.adbase.log(
             "Device State: {}, User Device Sensor: {}, New: {}, State: {}".format(
-                device_state, user_device_sensor, new, uds_state
+                device_entity_id, device_state_sensor, new, device_state_sensor_value
             ),
             level="DEBUG",
         )
 
         if (
-            self.not_home_timers[device_state] is None
-            and uds_state not in ["off", "not_home"]
+            self.not_home_timers[device_entity_id] is None
+            and device_state_sensor_value not in ["off", "not_home"]
             and int(new) == 0
         ):
 
@@ -423,37 +423,37 @@ class HomePresenceApp(ad.ADBase):
             # check within the timeout time
             self.run_arrive_scan()
 
-            self.not_home_timers[device_state] = self.adbase.run_in(
-                self.not_home_func, self.timeout, device_state=device_state
+            self.not_home_timers[device_entity_id] = self.adbase.run_in(
+                self.not_home_func, self.timeout, device_entity_id=device_entity_id
             )
-            self.adbase.log(f"Timer Started for {device_state}", level="DEBUG")
+            self.adbase.log(f"Timer Started for {device_entity_id}", level="DEBUG")
 
     def not_home_func(self, kwargs):
         """Manage devices that are not home."""
-        device_state = kwargs.get("device_state")
-        user_device_sensor = f"{self.user_device_domain}.{device_state}"
-        user_conf_sensors = self.home_state_entities[device_state]
+        device_entity_id = kwargs.get("device_entity_id")
+        device_state_sensor = f"{self.user_device_domain}.{device_entity_id}"
+        device_conf_sensors = self.home_state_entities[device_entity_id]
         sensor_res = list(
-            map(lambda x: self.hass.get_state(x, copy=False), user_conf_sensors)
+            map(lambda x: self.hass.get_state(x, copy=False), device_conf_sensors)
         )
 
         # Remove unknown vales from list
         sensor_res = [i for i in sensor_res if i is not None and i != "unknown"]
 
         self.adbase.log(
-            f"Device State: {device_state}, Sensors: {sensor_res}", level="DEBUG"
+            f"Device State: {device_entity_id}, Sensors: {sensor_res}", level="DEBUG"
         )
 
         if all(list(map(lambda x: int(x) < self.minimum_conf, sensor_res))):
             # Confirm for the last time
-            self.update_hass_sensor(user_device_sensor, self.state_false)
+            self.update_hass_sensor(device_state_sensor, self.state_false)
 
-            if user_device_sensor in self.all_users_sensors:
+            if device_state_sensor in self.all_users_sensors:
                 # At least someone not home, set Everyone Home to off
                 self.update_hass_sensor(self.everyone_home, "off")
                 self.adbase.run_in(self.check_home_state, 2, check_state="not_home")
 
-        self.not_home_timers[device_state] = None
+        self.not_home_timers[device_entity_id] = None
 
     def send_mqtt_message(self, kwargs):
         """Send a MQTT Message."""
@@ -659,8 +659,8 @@ class HomePresenceApp(ad.ADBase):
             for sensor in entity_list:
                 if location in sensor:  # that sensor belongs to that location
                     self.update_hass_sensor(sensor, 0)
-                    device_local = sensor.replace("sensor.", "")
-                    appdaemon_entity = f"{self.presence_name}.{device_local}"
+                    device_entity_prefix = sensor.replace("sensor.", "")
+                    appdaemon_entity = f"{self.presence_name}.{device_entity_prefix}"
                     self.mqtt.set_state(appdaemon_entity, state=0, rssi="-99")
 
         if location in self.location_timers:

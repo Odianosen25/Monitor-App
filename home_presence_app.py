@@ -238,7 +238,8 @@ class HomePresenceApp(ad.ADBase):
                 conf_sensor,
                 state="unknown",
                 attributes={
-                    "friendly_name": f"{friendly_name} {location_friendly} Confidence"
+                    "friendly_name": f"{friendly_name} {location_friendly} Confidence",
+                    "unit_of_measurement": "%"
                 },
             )
 

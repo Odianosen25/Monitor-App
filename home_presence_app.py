@@ -26,6 +26,11 @@ class HomePresenceApp(ad.ADBase):
         self.mqtt = self.get_plugin_api("MQTT")
 
         self.presence_topic = self.args.get("monitor_topic", "presence")
+        self.user_device_domain = self.args.get("user_device_domain", "binary_sensor")
+        self.state_true = "on" if self.user_device_domain == "binary_sensor" else "home"
+        self.state_false = (
+            "off" if self.user_device_domain == "binary_sensor" else "not_home"
+        )
         self.topic_level = len(self.presence_topic.split("/"))
         self.timeout = self.args.get("not_home_timeout", 30)
         self.minimum_conf = self.args.get("minimum_confidence", 90)
@@ -40,7 +45,7 @@ class HomePresenceApp(ad.ADBase):
         self.system_handle = dict()
 
         # Create a sensor to keep track of if the monitor is busy or not.
-        self.monitor_entity = "{}.monitor_state".format(self.presence_topic)
+        self.monitor_entity = f"{self.presence_topic}.monitor_state"
         if not self.mqtt.entity_exists(self.monitor_entity):
             self.mqtt.set_state(
                 self.monitor_entity,
@@ -75,7 +80,7 @@ class HomePresenceApp(ad.ADBase):
         # Setup the system checks.
         if self.system_timeout > system_check:
             time = datetime.datetime.now() + datetime.timedelta(seconds=1)
-            topic = "{}/echo".format(self.presence_topic)
+            topic = f"{self.presence_topic}/echo"
             self.adbase.run_every(
                 self.send_mqtt_message,
                 time,
@@ -93,9 +98,7 @@ class HomePresenceApp(ad.ADBase):
 
         # Setup primary MQTT Listener for all presence messages.
         self.mqtt.listen_event(
-            self.presence_message,
-            "MQTT_MESSAGE",
-            wildcard=f"{self.presence_topic}/#",
+            self.presence_message, "MQTT_MESSAGE", wildcard=f"{self.presence_topic}/#"
         )
 
         # Listen for any HASS restarts
@@ -192,16 +195,14 @@ class HomePresenceApp(ad.ADBase):
             return
 
         device_name = topic_path[self.topic_level + 1]
-        device_local = "{}_{}".format(device_name, location)
-        appdaemon_entity = "{}.{}".format(self.presence_topic, device_local)
+        device_local = f"{device_name}_{location}"
+        appdaemon_entity = f"{self.presence_topic}.{device_local}"
 
         # RSSI Value for a Known Device:
         if action == "rssi":
             attributes = {"rssi": payload, "last_reported_by": location}
             self.adbase.log(
-                "Recieved an RSSI of {} for {} from {}".format(
-                    payload, device_name, location_friendly
-                ),
+                f"Recieved an RSSI of {payload} for {device_name} from {location_friendly}",
                 level="INFO",
             )
             self.mqtt.set_state(appdaemon_entity, attributes=attributes)
@@ -215,7 +216,7 @@ class HomePresenceApp(ad.ADBase):
             return
 
         friendly_name = payload_json.get("name", device_name).strip().title()
-        payload_json["friendly_name"] = "{} {}".format(friendly_name, location_friendly)
+        payload_json["friendly_name"] = f"{friendly_name} {location_friendly}"
 
         if "name" in payload_json:
             del payload_json["name"]
@@ -223,10 +224,10 @@ class HomePresenceApp(ad.ADBase):
         confidence = int(float(payload_json["confidence"]))
         del payload_json["confidence"]
 
-        conf_sensor = "sensor.{}".format(device_local)
-        device_state = "{}_home".format(device_name)
-        user_device_sensor = "binary_sensor.{}".format(device_state)
-        state = "on" if confidence >= self.minimum_conf else "off"
+        conf_sensor = f"sensor.{device_local}"
+        device_state = f"{device_name}_home"
+        user_device_sensor = f"{self.user_device_domain}.{device_state}"
+        state = self.state_true if confidence >= self.minimum_conf else self.state_false
 
         if not self.hass.entity_exists(conf_sensor):
             # Entity does not exist in HASS yet.
@@ -235,9 +236,7 @@ class HomePresenceApp(ad.ADBase):
                 conf_sensor,
                 state="unknown",
                 attributes={
-                    "friendly_name": "{} {} Confidence".format(
-                        friendly_name, location_friendly
-                    )
+                    "friendly_name": f"{friendly_name} {location_friendly} Confidence"
                 },
             )
 
@@ -251,7 +250,7 @@ class HomePresenceApp(ad.ADBase):
                 user_device_sensor,
                 state=state,
                 attributes={
-                    "friendly_name": "{} Home".format(friendly_name),
+                    "friendly_name": f"{friendly_name} Home",
                     "device_class": "presence",
                 },
             )
@@ -283,7 +282,7 @@ class HomePresenceApp(ad.ADBase):
         """Handle a status message from the presence system."""
         location_friendly = location.replace("_", " ").title()
         self.adbase.log(
-            "The {} Presence System is {}.".format(location_friendly, payload.title()),
+            f"The {location_friendly} Presence System is {payload.title()}.",
             level="DEBUG",
         )
 
@@ -299,7 +298,7 @@ class HomePresenceApp(ad.ADBase):
             # Location back online. Cancel any timers.
             self.adbase.cancel_timer(self.location_timers[location])
 
-        entity_id = "{}.{}".format(self.presence_topic, location)
+        entity_id = f"{self.presence_topic}.{location}"
         attributes = {}
 
         if not self.mqtt.entity_exists(entity_id):
@@ -327,7 +326,7 @@ class HomePresenceApp(ad.ADBase):
 
         if action == "start":
             self.adbase.log(
-                "The {} presence system is scanning...".format(location), level="DEBUG"
+                f"The {location} presence system is scanning...", level="DEBUG"
             )
             if old_state != "scanning":
                 # Scanner was IDLE. Set it to SCANNING.
@@ -347,12 +346,10 @@ class HomePresenceApp(ad.ADBase):
 
     def handle_echo(self, location, payload):
         """Handle an echo response from a scanner."""
-        self.adbase.log(
-            "Echo received from {}: {}".format(location, payload), level="DEBUG"
-        )
+        self.adbase.log(f"Echo received from {location}: {payload}", level="DEBUG")
         if payload != "ok":
             return
-        entity_id = "{}.{}".format(self.presence_topic, location)
+        entity_id = f"{self.presence_topic}.{location}"
         if location in self.location_timers:
             self.adbase.cancel_timer(self.location_timers[location])
 
@@ -365,14 +362,14 @@ class HomePresenceApp(ad.ADBase):
     def confidence_updated(self, entity, attribute, old, new, kwargs):
         """Respond to a monitor providing a new confidence value."""
         device_state = kwargs["device_state"]
-        user_device_sensor = "binary_sensor.{}".format(device_state)
+        user_device_sensor = f"{self.user_device_domain}.{device_state}"
         uds_state = self.hass.get_state(user_device_sensor, copy=False)
         user_conf_sensors = self.home_state_entities.get(device_state)
 
         if user_conf_sensors is None:
             self.adbase.log(
-                "Got Confidence Value for {} but device"
-                " is not set up (no sensors found).".format(device_state),
+                f"Got Confidence Value for {device_state} but device"
+                " is not set up (no sensors found).",
                 level="WARNING",
             )
             return
@@ -390,7 +387,7 @@ class HomePresenceApp(ad.ADBase):
                 self.adbase.cancel_timer(self.not_home_timers[device_state])
                 self.not_home_timers[device_state] = None
 
-            self.update_hass_sensor(user_device_sensor, "on")
+            self.update_hass_sensor(user_device_sensor, self.state_true)
             self.update_hass_sensor(self.somebody_is_home, "on")
 
             if user_device_sensor in self.all_users_sensors:
@@ -407,7 +404,7 @@ class HomePresenceApp(ad.ADBase):
 
         if (
             self.not_home_timers[device_state] is None
-            and uds_state != "off"
+            and uds_state not in ["off", "not_home"]
             and int(new) == 0
         ):
 
@@ -418,7 +415,7 @@ class HomePresenceApp(ad.ADBase):
             self.not_home_timers[device_state] = self.adbase.run_in(
                 self.not_home_func, self.timeout, device_state=device_state
             )
-            self.adbase.log("Timer Started for {}".format(device_state), level="DEBUG")
+            self.adbase.log(f"Timer Started for {device_state}", level="DEBUG")
 
     def not_home_func(self, kwargs):
         """Manage devices that are not home."""
@@ -433,13 +430,12 @@ class HomePresenceApp(ad.ADBase):
         sensor_res = [i for i in sensor_res if i is not None and i != "unknown"]
 
         self.adbase.log(
-            "Device State: {}, Sensors: {}".format(device_state, sensor_res),
-            level="DEBUG",
+            f"Device State: {device_state}, Sensors: {sensor_res}", level="DEBUG"
         )
 
         if all(list(map(lambda x: int(x) < self.minimum_conf, sensor_res))):
             # Confirm for the last time
-            self.update_hass_sensor(user_device_sensor, "off")
+            self.update_hass_sensor(user_device_sensor, self.state_false)
 
             if user_device_sensor in self.all_users_sensors:
                 # At least someone not home, set Everyone Home to off
@@ -483,8 +479,7 @@ class HomePresenceApp(ad.ADBase):
     def update_hass_sensor(self, sensor, new_state, new_attr=None):
         """Update the hass sensor if it has changed."""
         self.adbase.log(
-            "__function__: Entity_ID: {}, new_state: {}".format(sensor, new_state),
-            level="DEBUG",
+            f"__function__: Entity_ID: {sensor}, new_state: {new_state}", level="DEBUG"
         )
         sensor_state = self.hass.get_state(sensor, attribute="all")
         state = sensor_state.get("state")
@@ -500,7 +495,7 @@ class HomePresenceApp(ad.ADBase):
 
     def gateway_opened(self, entity, attribute, old, new, kwargs):
         """Respond to a gateway device opening or closing."""
-        self.adbase.log("Gateway Sensor {} now {}".format(entity, new), level="DEBUG")
+        self.adbase.log(f"Gateway Sensor {entity} now {new}", level="DEBUG")
 
         if self.gateway_timer is not None:
             # Cancel Existing Timer
@@ -524,7 +519,7 @@ class HomePresenceApp(ad.ADBase):
 
         This will attempt to check for where users are located.
         """
-        self.adbase.log("Motion Sensor {} now {}".format(entity, new), level="DEBUG")
+        self.adbase.log(f"Motion Sensor {entity} now {new}", level="DEBUG")
 
         if self.motion_timer is not None:  # a timer is running already
             self.adbase.cancel_timer(self.motion_timer)
@@ -549,7 +544,7 @@ class HomePresenceApp(ad.ADBase):
             # Someone is home, check if everyone is home.
             self.update_hass_sensor(self.everyone_home, "on")
         elif check_state == "not_home" and all(
-            list(map(lambda x: x == "off", user_res))
+            list(map(lambda x: x in ["off", "not_home"], user_res))
         ):
             # Someone is not home, see if anyone is still home.
             self.update_hass_sensor(self.everyone_not_home, "on")
@@ -559,7 +554,7 @@ class HomePresenceApp(ad.ADBase):
 
     def reload_device_state(self, kwargs):
         """Get the latest states from the scanners."""
-        topic = "{}/KNOWN DEVICE STATES".format(self.presence_topic)
+        topic = f"{self.presence_topic}/KNOWN DEVICE STATES"
         self.adbase.run_in(
             self.send_mqtt_message, 0, topic=topic, payload="", scan_type="System"
         )
@@ -580,7 +575,7 @@ class HomePresenceApp(ad.ADBase):
 
         Will wait for the scanner to be free and then sends the message.
         """
-        topic = "{}/scan/arrive".format(self.presence_topic)
+        topic = f"{self.presence_topic}/scan/arrive"
         payload = ""
         if self.mqtt.get_state(self.monitor_entity, copy=False) == "idle":
             self.mqtt.mqtt_publish(topic, payload)
@@ -609,7 +604,7 @@ class HomePresenceApp(ad.ADBase):
         delay = kwargs.get("delay", self.depart_check_time)
         count = kwargs.get("count", 1)
 
-        topic = "{}/scan/depart".format(self.presence_topic)
+        topic = f"{self.presence_topic}/scan/depart"
         payload = ""
 
         # Cancel any timers
@@ -628,14 +623,14 @@ class HomePresenceApp(ad.ADBase):
 
     def run_rssi_scan(self, kwargs):
         """Send a RSSI Scan Request."""
-        topic = "{}/scan/rssi".format(self.presence_topic)
+        topic = f"{self.presence_topic}/scan/rssi"
         payload = ""
         self.mqtt.mqtt_publish(topic, payload)
         self.motion_timer = None
 
     def restart_device(self, kwargs):
         """Send a restart command to the monitor services."""
-        topic = "{}/scan/restart".format(self.presence_topic)
+        topic = f"{self.presence_topic}/scan/restart"
         payload = ""
         self.mqtt.mqtt_publish(topic, payload)
 
@@ -654,13 +649,13 @@ class HomePresenceApp(ad.ADBase):
                 if location in sensor:  # that sensor belongs to that location
                     self.update_hass_sensor(sensor, 0)
                     device_local = sensor.replace("sensor.", "")
-                    appdaemon_entity = "{}.{}".format(self.presence_topic, device_local)
+                    appdaemon_entity = f"{self.presence_topic}.{device_local}"
                     self.mqtt.set_state(appdaemon_entity, state=0, rssi="-99")
 
         if location in self.location_timers:
             self.location_timers.pop(location)
 
-        entity_id = "{}.{}".format(self.presence_topic, location)
+        entity_id = f"{self.presence_topic}.{location}"
         self.mqtt.set_state(entity_id, state="Offline")
 
     def system_state_changed(self, entity, attribute, old, new, kwargs):
@@ -691,7 +686,7 @@ class HomePresenceApp(ad.ADBase):
             self.adbase.run_in(
                 self.send_mqtt_message,
                 timer,
-                topic="{}/setup/ADD STATIC DEVICE".format(self.presence_topic),
+                topic=f"{self.presence_topic}/setup/ADD STATIC DEVICE",
                 payload=device,
                 scan_type="System",
             )
@@ -702,7 +697,7 @@ class HomePresenceApp(ad.ADBase):
         self.adbase.run_in(
             self.send_mqtt_message,
             0,
-            topic="{}/setup/DELETE STATIC DEVICE".format(self.presence_topic),
+            topic=f"{self.presence_topic}/setup/DELETE STATIC DEVICE",
             payload=kwargs["device"],
             scan_type="System",
         )

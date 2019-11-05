@@ -19,6 +19,7 @@ home_presence_app:
   everyone_not_home: everyone_not_home
   everyone_home: everyone_home
   somebody_is_home: somebody_is_home
+  user_device_domain: binary_sensor  # Options: binary_sensor or device_tracker
   #pin_app: True
   #pin_thread: 3
   #log: apps_log

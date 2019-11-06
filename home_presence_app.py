@@ -162,6 +162,16 @@ class HomePresenceApp(ad.ADBase):
         except ValueError:
             pass
 
+        # Handle request for immediate scan via MQTT
+        if action == "ad_scan_now":
+            self.mqtt.set_state(
+                self.monitor_entity,
+                state="scan",
+                attributes={"locations": [], "scan_type": payload},
+                replace=True,
+            )
+            return
+
         # Determine which scanner initiated the message
         location = "unknown"
         if isinstance(payload_json, dict) and "identity" in payload_json:

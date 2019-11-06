@@ -137,7 +137,7 @@ class HomePresenceApp(ad.ADBase):
         if self.hass.entity_exists(f"binary_sensor.{sensor}"):
             return
 
-        self.adbase.log(f"Creating Binary Sensor for {sensor}", level='DEBUG')
+        self.adbase.log(f"Creating Binary Sensor for {sensor}", level="DEBUG")
         attributes = {
             "friendly_name": sensor.replace("_", " ").title(),
             "device_class": "presence",
@@ -205,8 +205,10 @@ class HomePresenceApp(ad.ADBase):
             return
 
         device_name = topic_path[self.topic_level + 1]
-        device_entity_prefix = f"{self.presence_name}_{location}_{device_name}"
+        device_entity_id = f"{self.presence_name}_{device_name}"
+        device_entity_prefix = f"{device_entity_id}_{location}"
         appdaemon_entity = f"{self.presence_name}.{device_entity_prefix}"
+        device_conf_sensor = f"sensor.{device_entity_prefix}_conf"
 
         # RSSI Value for a Known Device:
         if action == "rssi":
@@ -216,7 +218,8 @@ class HomePresenceApp(ad.ADBase):
                 level="INFO",
             )
             self.mqtt.set_state(appdaemon_entity, attributes=attributes)
-            # TODO: Set a sensor within HASS for the RSSI value.
+            self.update_hass_sensor(device_conf_sensor, new_attr={"rssi": payload})
+            self.update_nearest_monitor(device_entity_id)
             return
 
         if not payload_json or payload_json.get("type") not in [
@@ -234,20 +237,20 @@ class HomePresenceApp(ad.ADBase):
         confidence = int(float(payload_json["confidence"]))
         del payload_json["confidence"]
 
-        device_conf_sensor = f"sensor.{device_entity_prefix}_conf"
-        device_entity_id = f"{self.presence_name}_{device_name}"
         device_state_sensor = f"{self.user_device_domain}.{device_entity_id}"
         state = self.state_true if confidence >= self.minimum_conf else self.state_false
 
         if not self.hass.entity_exists(device_conf_sensor):
             # Entity does not exist in HASS yet.
-            self.adbase.log("Creating sensor {!r} for Confidence".format(device_conf_sensor))
+            self.adbase.log(
+                "Creating sensor {!r} for Confidence".format(device_conf_sensor)
+            )
             self.hass.set_state(
                 device_conf_sensor,
                 state="unknown",
                 attributes={
                     "friendly_name": f"{friendly_name} {location_friendly} Confidence",
-                    "unit_of_measurement": "%"
+                    "unit_of_measurement": "%",
                 },
             )
 
@@ -278,10 +281,12 @@ class HomePresenceApp(ad.ADBase):
                 immediate=True,
             )
 
-        self.update_hass_sensor(device_conf_sensor, confidence)
-
         payload_json["location"] = location
+        self.update_hass_sensor(device_conf_sensor, confidence, new_attr=payload_json)
         self.mqtt.set_state(appdaemon_entity, state=confidence, attributes=payload_json)
+
+        if "rssi" in payload_json:
+            self.update_nearest_monitor(device_entity_id)
 
         if device_state_sensor not in self.all_users_sensors:
             self.all_users_sensors.append(device_state_sensor)
@@ -369,6 +374,44 @@ class HomePresenceApp(ad.ADBase):
         )
         if self.mqtt.get_state(entity_id, copy=False) == "offline":
             self.mqtt.set_state(entity_id, state="online")
+
+    def update_nearest_monitor(self, device_entity_id):
+        """Determine which monitor the device is closest to based on RSSI value."""
+        device_conf_sensors = self.home_state_entities.get(device_entity_id)
+
+        if device_conf_sensors is None:
+            self.adbase.log(
+                f"Got Confidence Value for {device_entity_id} but device"
+                " is not set up (no sensors found).",
+                level="WARNING",
+            )
+            return
+
+        rssi_values = {
+            loc.replace(f"sensor.{device_entity_id}_", "").replace(
+                "_conf", ""
+            ): self.hass.get_state(loc, attribute="rssi")
+            for loc in device_conf_sensors
+        }
+        rssi_values = {
+            loc: int(rssi)
+            for loc, rssi in rssi_values.items()
+            if rssi is not None and str(rssi) != "-99"
+        }
+
+        nearest_monitor = "unknown"
+        if rssi_values:
+            nearest_monitor = max(rssi_values, key=rssi_values.get)
+            self.adbase.log(
+                "{} is closest to {} based on last reported RSSI values".format(
+                    device_entity_id, nearest_monitor
+                ),
+                level="INFO",
+            )
+        self.update_hass_sensor(
+            f"{self.user_device_domain}.{device_entity_id}",
+            new_attr={"nearest_monitor": nearest_monitor},
+        )
 
     def confidence_updated(self, entity, attribute, old, new, kwargs):
         """Respond to a monitor providing a new confidence value."""
@@ -486,7 +529,7 @@ class HomePresenceApp(ad.ADBase):
             self.mqtt.mqtt_publish(topic, payload)
             return
 
-    def update_hass_sensor(self, sensor, new_state, new_attr=None):
+    def update_hass_sensor(self, sensor, new_state=None, new_attr=None):
         """Update the hass sensor if it has changed."""
         self.adbase.log(
             f"__function__: Entity_ID: {sensor}, new_state: {new_state}", level="DEBUG"
@@ -494,7 +537,11 @@ class HomePresenceApp(ad.ADBase):
         sensor_state = self.hass.get_state(sensor, attribute="all")
         state = sensor_state.get("state")
         attributes = sensor_state.get("attributes", {})
-        update_needed = state != new_state
+        if new_state is None:
+            update_needed = False
+            new_state = state
+        else:
+            update_needed = state != new_state
 
         if isinstance(new_attr, dict):
             attributes.update(new_attr)
@@ -659,9 +706,12 @@ class HomePresenceApp(ad.ADBase):
             for sensor in entity_list:
                 if location in sensor:  # that sensor belongs to that location
                     self.update_hass_sensor(sensor, 0)
-                    device_entity_prefix = sensor.replace("sensor.", "")
+                    device_entity_prefix = sensor.replace("sensor.", "").replace(
+                        "_conf", ""
+                    )
                     appdaemon_entity = f"{self.presence_name}.{device_entity_prefix}"
                     self.mqtt.set_state(appdaemon_entity, state=0, rssi="-99")
+                    self.update_hass_sensor(sensor, new_attr={"rssi": "-99"})
 
         if location in self.location_timers:
             self.location_timers.pop(location)

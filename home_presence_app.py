@@ -11,6 +11,8 @@ apps.yaml parameters:
 | - everyone_home: Name to use for the "Everyone Home" Sensor
 | - somebody_is_home: Name to use for the "Somebody Is Home" Sensor
 | - user_device_domain: Use "binary_sensor" or "device_tracker" domains.
+| - known_devices: Known devices to be added to each monitor.
+| - known_beacons: Known Beacons to monitor.
 """
 import json
 import datetime
@@ -34,6 +36,13 @@ class HomePresenceApp(ad.ADBase):
         self.state_true = "on" if self.user_device_domain == "binary_sensor" else "home"
         self.state_false = (
             "off" if self.user_device_domain == "binary_sensor" else "not_home"
+        )
+
+        # Setup dictionary of known beacons in the format { name: mac_id }.
+        self.known_beacons = { p[1].lower(): p[0] for p in (b.split(" ",1) for b in self.args.get("known_beacons", [])) }
+        self.adbase.log(
+            f"Monitoring for known beacons:  \n{self.known_beacons!r}",
+            level="DEBUG",
         )
 
         # Support nested presence topics (e.g. "hass/monitor")
@@ -219,6 +228,7 @@ class HomePresenceApp(ad.ADBase):
         device_entity_prefix = f"{device_entity_id}_{location}"
         appdaemon_entity = f"{self.presence_name}.{device_entity_prefix}"
         device_conf_sensor = f"sensor.{device_entity_prefix}_conf"
+        friendly_name = device_name.strip().replace("_", " ").title()
 
         # RSSI Value for a Known Device:
         if action == "rssi":
@@ -232,17 +242,25 @@ class HomePresenceApp(ad.ADBase):
             self.update_nearest_monitor(device_entity_id)
             return
 
-        if not payload_json or payload_json.get("type") not in [
+        # Ignore invalid JSON responses
+        if not payload_json:
+            return
+        
+        if payload_json.get("type") not in [
             "KNOWN_MAC",
             "GENERIC_BEACON",
-        ]:
+        ] and payload_json.get("id") not in list(self.known_beacons.values()) :
+            self.adbase.log(
+                f"Ignoring Beacon {payload_json.get('id')} because it is not in the known_beacons list.",
+                level="DEBUG",
+            )
             return
 
-        friendly_name = payload_json.get("name", device_name).strip().title()
+        # friendly_name = payload_json.get("name", device_name).strip().title()
         payload_json["friendly_name"] = f"{friendly_name} {location_friendly}"
 
         if "name" in payload_json:
-            del payload_json["name"]
+            payload_json["name"] = payload_json["name"].strip().title()
 
         confidence = int(float(payload_json["confidence"]))
         del payload_json["confidence"]
@@ -541,9 +559,9 @@ class HomePresenceApp(ad.ADBase):
 
     def update_hass_sensor(self, sensor, new_state=None, new_attr=None):
         """Update the hass sensor if it has changed."""
-        self.adbase.log(
-            f"__function__: Entity_ID: {sensor}, new_state: {new_state}", level="DEBUG"
-        )
+        if not self.hass.entity_exists(sensor):
+            self.adbase.log(f"Entity {sensor} does not exist.", level="ERROR")
+
         sensor_state = self.hass.get_state(sensor, attribute="all")
         state = sensor_state.get("state")
         attributes = sensor_state.get("attributes", {})
@@ -558,6 +576,10 @@ class HomePresenceApp(ad.ADBase):
             update_needed = True
 
         if update_needed:
+            self.adbase.log(
+                f"__function__: Entity_ID: {sensor}, new_state: {new_state}",
+                level="DEBUG",
+            )
             self.hass.set_state(sensor, state=new_state, attributes=attributes)
 
     def gateway_opened(self, entity, attribute, old, new, kwargs):

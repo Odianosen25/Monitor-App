@@ -39,11 +39,7 @@ class HomePresenceApp(ad.ADBase):
         )
 
         # Setup dictionary of known beacons in the format { name: mac_id }.
-        self.known_beacons = { p[1].lower(): p[0] for p in (b.split(" ",1) for b in self.args.get("known_beacons", [])) }
-        self.adbase.log(
-            f"Monitoring for known beacons:  \n{self.known_beacons!r}",
-            level="DEBUG",
-        )
+        self.known_beacons = { p[0]: p[1].lower() for p in (b.split(" ",1) for b in self.args.get("known_beacons", [])) }
 
         # Support nested presence topics (e.g. "hass/monitor")
         self.topic_level = len(self.presence_topic.split("/"))
@@ -224,6 +220,12 @@ class HomePresenceApp(ad.ADBase):
             return
 
         device_name = topic_path[self.topic_level + 1]
+        # Handle Beacon Topics in MAC or iBeacon ID formats and make friendly.
+        if device_name in list(self.known_beacons.keys()):
+            device_name = self.known_beacons[device_name]
+        else:
+            device_name = device_name.replace(":", "_").replace("-", "_")
+
         device_entity_id = f"{self.presence_name}_{device_name}"
         device_entity_prefix = f"{device_entity_id}_{location}"
         appdaemon_entity = f"{self.presence_name}.{device_entity_prefix}"
@@ -246,23 +248,24 @@ class HomePresenceApp(ad.ADBase):
         if not payload_json:
             return
         
+        # Ignore unknown/bad types and unknown beacons
         if payload_json.get("type") not in [
             "KNOWN_MAC",
             "GENERIC_BEACON",
-        ] and payload_json.get("id") not in list(self.known_beacons.values()) :
+        ] and payload_json.get("id") not in list(self.known_beacons.keys()):
             self.adbase.log(
                 f"Ignoring Beacon {payload_json.get('id')} because it is not in the known_beacons list.",
                 level="DEBUG",
             )
             return
 
-        # friendly_name = payload_json.get("name", device_name).strip().title()
+        # Clean-up names now that we have proper JSON payload available.
         payload_json["friendly_name"] = f"{friendly_name} {location_friendly}"
-
         if "name" in payload_json:
             payload_json["name"] = payload_json["name"].strip().title()
 
-        confidence = int(float(payload_json["confidence"]))
+        # Get the confidence value from the payload
+        confidence = int(float(payload_json.get("confidence", "0")))
         del payload_json["confidence"]
 
         device_state_sensor = f"{self.user_device_domain}.{device_entity_id}"
@@ -293,6 +296,7 @@ class HomePresenceApp(ad.ADBase):
                 state=state,
                 attributes={
                     "friendly_name": f"{friendly_name} Home",
+                    "type": payload_json.get("type", "UNKNOWN_TYPE"),
                     "device_class": "presence",
                 },
             )
@@ -300,6 +304,7 @@ class HomePresenceApp(ad.ADBase):
         if device_entity_id not in self.home_state_entities:
             self.home_state_entities[device_entity_id] = list()
 
+        # Add listeners to the conf sensors to update the main state sensor on change.
         if device_conf_sensor not in self.home_state_entities[device_entity_id]:
             self.home_state_entities[device_entity_id].append(device_conf_sensor)
             self.hass.listen_state(
@@ -309,10 +314,12 @@ class HomePresenceApp(ad.ADBase):
                 immediate=True,
             )
 
+        # Actually update the confidence sensor.
         payload_json["location"] = location
         self.update_hass_sensor(device_conf_sensor, confidence, new_attr=payload_json)
         self.mqtt.set_state(appdaemon_entity, state=confidence, attributes=payload_json)
 
+        # Set the nearest monitor property if we have a new RSSI.
         if "rssi" in payload_json:
             self.update_nearest_monitor(device_entity_id)
 
@@ -446,6 +453,7 @@ class HomePresenceApp(ad.ADBase):
         device_entity_id = kwargs["device_entity_id"]
         device_state_sensor = f"{self.user_device_domain}.{device_entity_id}"
         device_state_sensor_value = self.hass.get_state(device_state_sensor, copy=False)
+        device_type = self.hass.get_state(entity, attribute="type", copy=False)
         device_conf_sensors = self.home_state_entities.get(device_entity_id)
 
         if device_conf_sensors is None:
@@ -460,6 +468,13 @@ class HomePresenceApp(ad.ADBase):
             map(lambda x: self.hass.get_state(x, copy=False), device_conf_sensors)
         )
         sensor_res = [i for i in sensor_res if i is not None and i != "unknown"]
+
+        self.adbase.log(
+            "Device State: {}, User Device Sensor: {}, Device Type {}, New: {}, State: {}".format(
+                device_entity_id, device_state_sensor, device_type, new, device_state_sensor_value
+            ),
+            level="DEBUG",
+        )
 
         if sensor_res != [] and any(
             list(map(lambda x: int(x) >= self.minimum_conf, sensor_res))
@@ -477,22 +492,15 @@ class HomePresenceApp(ad.ADBase):
                 self.adbase.run_in(self.check_home_state, 2, check_state="is_home")
             return
 
-        self.adbase.log(
-            "Device State: {}, User Device Sensor: {}, New: {}, State: {}".format(
-                device_entity_id, device_state_sensor, new, device_state_sensor_value
-            ),
-            level="DEBUG",
-        )
-
         if (
             self.not_home_timers[device_entity_id] is None
             and device_state_sensor_value not in ["off", "not_home"]
             and int(new) == 0
         ):
-
-            # Run another scan before declaring the user away as extra
-            # check within the timeout time
-            self.run_arrive_scan()
+            if "BEACON" not in str(device_type):
+                # Run another scan before declaring the user away as extra
+                # check within the timeout time if this isn't a beacon
+                self.run_arrive_scan()
 
             self.not_home_timers[device_entity_id] = self.adbase.run_in(
                 self.not_home_func, self.timeout, device_entity_id=device_entity_id
@@ -508,11 +516,11 @@ class HomePresenceApp(ad.ADBase):
             map(lambda x: self.hass.get_state(x, copy=False), device_conf_sensors)
         )
 
-        # Remove unknown vales from list
+        # Remove unknown values from list
         sensor_res = [i for i in sensor_res if i is not None and i != "unknown"]
 
         self.adbase.log(
-            f"Device State: {device_entity_id}, Sensors: {sensor_res}", level="DEBUG"
+            f"Device Not Home: {device_entity_id}, Sensors: {sensor_res}", level="DEBUG"
         )
 
         if all(list(map(lambda x: int(x) < self.minimum_conf, sensor_res))):

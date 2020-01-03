@@ -25,13 +25,15 @@ home_presence_app:
   #log: apps_log
   #log_level: DEBUG
 
-  # Note: known_devices listed here will be added to each monitor instance.
-  # known_beacons will not, as there is currently no method in montior.sh
-  # to add beacons over mqtt. Beacons you wish to track must still be added here
-  # as well as in the KNOWN_BEACON_ADDRESSES files for each tracker, otherwise
-  # they will be ignored.
+  # known_devices listed here will be added to each monitor instance via MQTT.
   known_devices:
     - xx:xx:xx:xx:xx:xx Odianosen_iPhone
     - xx:xx:xx:xx:xx:xx Nkiruka_iPad
+
+  # known_beacons listed here should be added to each monitor instance's
+  # known_beacon_addresses file manually as there is no MQTT method to do so.
+  # However, if the MAC/ID is added here, it will still be tracked appropriately. 
   known_beacons:
-    - xx:xx:xx:xx:xx:xx Nkiruka_iBeacon
+    - xx:xx:xx:xx:xx:xx Nkiruka_BLE_Beacon
+    - 00000000-xxxx-xxxx-xxxx-xxxxxxxxxxxx-Major-minor Nkiruka_iBeacon_ID
+  

@@ -39,7 +39,10 @@ class HomePresenceApp(ad.ADBase):
         )
 
         # Setup dictionary of known beacons in the format { name: mac_id }.
-        self.known_beacons = { p[0]: p[1].lower() for p in (b.split(" ",1) for b in self.args.get("known_beacons", [])) }
+        self.known_beacons = {
+            p[0]: p[1].lower()
+            for p in (b.split(" ", 1) for b in self.args.get("known_beacons", []))
+        }
 
         # Support nested presence topics (e.g. "hass/monitor")
         self.topic_level = len(self.presence_topic.split("/"))
@@ -247,7 +250,7 @@ class HomePresenceApp(ad.ADBase):
         # Ignore invalid JSON responses
         if not payload_json:
             return
-        
+
         # Ignore unknown/bad types and unknown beacons
         if payload_json.get("type") not in [
             "KNOWN_MAC",
@@ -471,7 +474,11 @@ class HomePresenceApp(ad.ADBase):
 
         self.adbase.log(
             "Device State: {}, User Device Sensor: {}, Device Type {}, New: {}, State: {}".format(
-                device_entity_id, device_state_sensor, device_type, new, device_state_sensor_value
+                device_entity_id,
+                device_state_sensor,
+                device_type,
+                new,
+                device_state_sensor_value,
             ),
             level="DEBUG",
         )

@@ -24,6 +24,16 @@ home_presence_app:
   #pin_thread: 3
   #log: apps_log
   #log_level: DEBUG
+
+  # known_devices listed here will be added to each monitor instance via MQTT.
   known_devices:
-    - xx:xx:xx:xx:xx:xx Odianosen's iPhone
-    - xx:xx:xx:xx:xx:xx Nkiruka's iPad
+    - xx:xx:xx:xx:xx:xx Odianosen_iPhone
+    - xx:xx:xx:xx:xx:xx Nkiruka_iPad
+
+  # known_beacons listed here should be added to each monitor instance's
+  # known_beacon_addresses file manually as there is no MQTT method to do so.
+  # However, if the MAC/ID is added here, it will still be tracked appropriately. 
+  known_beacons:
+    - xx:xx:xx:xx:xx:xx Nkiruka_BLE_Beacon
+    - 00000000-xxxx-xxxx-xxxx-xxxxxxxxxxxx-Major-minor Nkiruka_iBeacon_ID
+  

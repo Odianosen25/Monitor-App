@@ -2,6 +2,7 @@ import adbase as ad
 import json
 import datetime
 
+
 class HomePresenceApp(ad.ADBase):
  
     def initialize(self):
@@ -50,7 +51,7 @@ class HomePresenceApp(ad.ADBase):
             self.hass.listen_state(self.motion_detected, motion_sensor) #if any motion is detected
 
         time = "00:00:01"
-        self.adbase.run_daily(self.restart_device, time, constrain_days = "sun") #restart device at midnight on sunday
+        self.adbase.run_daily(self.restart_device, time, constrain_days="sun,mon,tue,wed,thu,fri,sat") #restart device at midnight on sunday
 
         if self.system_timeout > system_check:
             time = datetime.datetime.now() + datetime.timedelta(seconds = 1)
@@ -64,6 +65,7 @@ class HomePresenceApp(ad.ADBase):
         self.hass.listen_event(self.hass_restarted, "plugin_restarted")
         self.adbase.run_in(self.reload_device_state, 5) #reload systems
         self.adbase.run_in(self.load_known_devices, 0) #load up devices for all locations
+        self.adbase.run_in(self.setup_service, 0) #setup service
         
     def presence_message(self, event_name, data, kwargs):
         topic = data["topic"]
@@ -478,6 +480,11 @@ class HomePresenceApp(ad.ADBase):
         topic = "{}/setup/DELETE STATIC DEVICE".format(self.presence_topic)
         self.adbase.run_in(self.send_mqtt_message, 0, topic=topic, payload=device, scan_type="System")
 
+        # now remove the device from AD
+        for entity in self.mqtt.get_state(f"{self.presence_topic}", copy=False):
+            if device == self.mqtt.get_state(entity, attribute="id", copy=False):
+                self.mqtt.remove_entity(entity)
+
     def hass_restarted(self, event, data, kwargs):
         self.setup_global_sensors()
         self.adbase.run_in(self.reload_device_state, 10)
@@ -497,3 +504,17 @@ class HomePresenceApp(ad.ADBase):
             self.adbase.log("Creating Binary Sensor for Somebody is Home")
             attributes = {"friendly_name": "Somebody is Home State", "device_class" : "presence"}
             self.hass.set_state(self.somebody_is_home, state = "off", attributes = attributes) #send to homeassistant to create binary sensor sensor for home state
+    
+    def setup_service(self, kwargs): # rgister services
+        self.mqtt.register_service(f"{self.presence_topic}/remove_known_device", self.presense_services)
+    
+    def presense_services(self, namespace, domain, service, kwargs):
+        self.adbase.log(f"presence_services() {namespace} {domain} {service} {kwargs}", level="DEBUG")
+
+        if service == "remove_known_device":
+            device = kwargs.get("device")
+            if device == None:
+                self.adbase.log("Could not process the service as no device provided")
+                return
+
+            self.adbase.run_in(self.remove_known_device, 0, device=device)

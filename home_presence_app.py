@@ -507,14 +507,20 @@ class HomePresenceApp(ad.ADBase):
     
     def setup_service(self, kwargs): # rgister services
         self.mqtt.register_service(f"{self.presence_topic}/remove_known_device", self.presense_services)
+        self.mqtt.register_service(f"{self.presence_topic}/run_arrive_scan", self.presense_services)
+        self.mqtt.register_service(f"{self.presence_topic}/run_depart_scan", self.presense_services)
+        self.mqtt.register_service(f"{self.presence_topic}/run_rssi_scan", self.presense_services)
+        self.mqtt.register_service(f"{self.presence_topic}/restart_device", self.presense_services)
+        self.mqtt.register_service(f"{self.presence_topic}/reload_device_state", self.presense_services)
     
     def presense_services(self, namespace, domain, service, kwargs):
         self.adbase.log(f"presence_services() {namespace} {domain} {service} {kwargs}", level="DEBUG")
 
+        func = getattr(self, service) #get the function first
+
         if service == "remove_known_device":
-            device = kwargs.get("device")
-            if device == None:
+            if "device" not in kwargs:
                 self.adbase.log("Could not process the service as no device provided")
                 return
-
-            self.adbase.run_in(self.remove_known_device, 0, device=device)
+                
+        self.adbase.run_in(func, 0, **kwargs)

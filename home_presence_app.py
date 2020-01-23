@@ -258,7 +258,7 @@ class HomePresenceApp(ad.ADBase):
             else:
                 self.adbase.log("Device State: {}, User Device Sensor: {}, New: {}, State: {}".format(device_state, user_device_sensor, new, self.hass.get_state(user_device_sensor, copy=False)), level = "DEBUG")
                 if self.not_home_timers[device_state] == None and self.hass.get_state(user_device_sensor, copy=False) != "off" and int(new) == 0: #run the timer
-                    self.run_arrive_scan() #run so it does another scan before declaring the user away as extra check within the timeout time
+                    self.adbase.run_in(self.run_arrive_scan, 0) #run so it does another scan before declaring the user away as extra check within the timeout time
                     self.not_home_timers[device_state] = self.adbase.run_in(self.not_home_func, self.timeout, device_state = device_state)
                     self.adbase.log("Timer Started for {}".format(device_state), level = "DEBUG")
 
@@ -292,10 +292,10 @@ class HomePresenceApp(ad.ADBase):
                 self.mqtt.mqtt_publish(topic, payload) #send to scan for departure of anyone
                 if count <= self.args.get("depart_scans", 3): #scan for departure times. 3 as default
                     count = count + 1
-                    self.run_depart_scan(count = count)
+                    self.adbase.run_in(self.run_depart_scan, 0, count=count)
 
             else: #meaning it is busy so re-run timer for it to get idle before sending the message to start scan
-                self.run_depart_scan(delay = 10, count = count)
+                self.adbase.run_in(self.run_depart_scan, 0, delay=10, count=count)
 
         elif kwargs["scan_type"] == "Arrive":
             self.mqtt.mqtt_publish(topic, payload) #send to scan for arrival of anyone
@@ -322,16 +322,16 @@ class HomePresenceApp(ad.ADBase):
             self.gateway_timer = None
 
         if self.hass.get_state(self.everyone_not_home, copy=False) == "on": #meaning no one at home
-            self.run_arrive_scan()
+            self.adbase.run_in(self.run_arrive_scan, 0)
 
         elif self.hass.get_state(self.everyone_home, copy=False) == "on": #meaning everyone at home
-            self.run_depart_scan()
-            #self.run_depart_scan(delay = 90)
+            self.adbase.run_in(self.run_depart_scan, 0)
+            #self.adbase.run_in(self.run_depart_scan, 0, delay=90)
 
         else:
-            self.run_arrive_scan()
-            self.run_depart_scan()
-            #self.run_depart_scan(delay = 90)
+            self.adbase.run_in(self.run_arrive_scan, 0)
+            self.adbase.run_in(self.run_depart_scan, 0)
+            #self.adbase.run_in(self.run_depart_scan, 0, delay=90)
 
     def motion_detected(self, entity, attribute, old, new, kwargs):
         """motion detected somewhere in the house, so needs to check for where users are"""
@@ -388,7 +388,7 @@ class HomePresenceApp(ad.ADBase):
         self.adbase.cancel_listen_state(self.monitor_handlers[scan])
         self.monitor_handlers[scan] = None
 
-    def run_arrive_scan(self, **kwargs):
+    def run_arrive_scan(self, kwargs):
         topic = "{}/scan/arrive".format(self.presence_topic)
         payload = ""
 
@@ -402,7 +402,7 @@ class HomePresenceApp(ad.ADBase):
                 self.monitor_handlers["Arrive Scan"] = self.mqtt.listen_state(self.monitor_changed_state, self.monitor_entity, 
                             new = "idle", old = "scanning", scan = "Arrive Scan", topic = topic, payload = payload)
 
-    def run_depart_scan(self, **kwargs):
+    def run_depart_scan(self, kwargs):
         delay = kwargs.get("delay", self.depart_check_time)
         count = kwargs.get("count", 1)
 
@@ -446,7 +446,7 @@ class HomePresenceApp(ad.ADBase):
         entity_id = "{}.{}".format(self.presence_topic, siteId)
         self.mqtt.set_state(entity_id, state = "Offline")
 
-        self.run_arrive_scan()
+        self.adbase.run_in(self.run_arrive_scan, 0)
 
     def system_state_changed(self, entity, attribute, old, new, kwargs):
         self.adbase.run_in(self.reload_device_state, 0)
@@ -456,14 +456,14 @@ class HomePresenceApp(ad.ADBase):
         locations = self.mqtt.get_state(entity, attribute="locations", copy=False)
 
         if scan_type == "both":
-            self.run_arrive_scan(location=locations)
-            self.run_depart_scan(location=locations)
+            self.adbase.run_in(self.run_arrive_scan, 0, location=locations)
+            self.adbase.run_in(self.run_depart_scan, 0, location=locations)
         
         elif scan_type == "arrival":
-            self.run_arrive_scan(location=locations)
+            self.adbase.run_in(self.run_arrive_scan, 0, location=locations)
         
         elif scan_type == "depart":
-            self.run_depart_scan(location=locations)
+            self.adbase.run_in(self.run_depart_scan, 0, location=locations)
 
         self.mqtt.set_state(entity, state = "idle")
 
@@ -512,15 +512,20 @@ class HomePresenceApp(ad.ADBase):
         self.mqtt.register_service(f"{self.presence_topic}/run_rssi_scan", self.presense_services)
         self.mqtt.register_service(f"{self.presence_topic}/restart_device", self.presense_services)
         self.mqtt.register_service(f"{self.presence_topic}/reload_device_state", self.presense_services)
+        self.mqtt.register_service(f"{self.presence_topic}/load_known_devices", self.presense_services)
+        self.mqtt.register_service(f"{self.presence_topic}/clear_location_entities", self.presense_services)
     
     def presense_services(self, namespace, domain, service, kwargs):
         self.adbase.log(f"presence_services() {namespace} {domain} {service} {kwargs}", level="DEBUG")
 
         func = getattr(self, service) #get the function first
 
-        if service == "remove_known_device":
-            if "device" not in kwargs:
-                self.adbase.log("Could not process the service as no device provided")
-                return
-                
+        if service == "remove_known_device" and "device" not in kwargs:
+            self.adbase.log("Could not Remove Known Device as no Device provided", level="WARNING")
+            return
+        
+        elif service == "clear_location_entities" and "location" not in kwargs:
+            self.adbase.log("Could not Clear Location Entities as no Location provided", level="WARNING")
+            return
+       
         self.adbase.run_in(func, 0, **kwargs)

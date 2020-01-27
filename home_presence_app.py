@@ -51,7 +51,7 @@ class HomePresenceApp(ad.ADBase):
             self.hass.listen_state(self.motion_detected, motion_sensor) #if any motion is detected
 
         time = "00:00:01"
-        self.adbase.run_daily(self.restart_device, time, constrain_days="sun,mon,tue,wed,thu,fri,sat") #restart device at midnight on sunday
+        self.adbase.run_daily(self.restart_device, time, constrain_days="sun,wed") #restart device at midnight on sunday
 
         if self.system_timeout > system_check:
             time = datetime.datetime.now() + datetime.timedelta(seconds=1)
@@ -295,7 +295,7 @@ class HomePresenceApp(ad.ADBase):
                     self.adbase.run_in(self.run_depart_scan, 0, count=count)
 
             else: #meaning it is busy so re-run timer for it to get idle before sending the message to start scan
-                self.adbase.run_in(self.run_depart_scan, 0, delay=10, count=count)
+                self.adbase.run_in(self.run_depart_scan, 0, scan_delay=10, count=count)
 
         elif kwargs["scan_type"] == "Arrive":
             self.mqtt.mqtt_publish(topic, payload) #send to scan for arrival of anyone
@@ -326,12 +326,12 @@ class HomePresenceApp(ad.ADBase):
 
         elif self.hass.get_state(self.everyone_home, copy=False) == "on": #meaning everyone at home
             self.adbase.run_in(self.run_depart_scan, 0)
-            #self.adbase.run_in(self.run_depart_scan, 0, delay=90)
+            #self.adbase.run_in(self.run_depart_scan, 0, scan_delay=90)
 
         else:
             self.adbase.run_in(self.run_arrive_scan, 0)
             self.adbase.run_in(self.run_depart_scan, 0)
-            #self.adbase.run_in(self.run_depart_scan, 0, delay=90)
+            #self.adbase.run_in(self.run_depart_scan, 0, scan_delay=90)
 
     def motion_detected(self, entity, attribute, old, new, kwargs):
         """motion detected somewhere in the house, so needs to check for where users are"""
@@ -403,7 +403,7 @@ class HomePresenceApp(ad.ADBase):
                             new="idle", old="scanning", scan="Arrive Scan", topic=topic, payload=payload)
 
     def run_depart_scan(self, kwargs):
-        delay = kwargs.get("delay", self.depart_check_time)
+        scan_delay = kwargs.get("scan_delay", self.depart_check_time)
         count = kwargs.get("count", 1)
 
         topic ="{}/scan/depart".format(self.presence_topic)
@@ -412,7 +412,7 @@ class HomePresenceApp(ad.ADBase):
         if self.gateway_timer != None: #meaning a timer running aleady
             self.adbase.cancel_timer(self.gateway_timer) #just extra check, shouldn't be needed
 
-        self.gateway_timer = self.adbase.run_in(self.send_mqtt_message, delay, topic=topic, 
+        self.gateway_timer = self.adbase.run_in(self.send_mqtt_message, scan_delay, topic=topic, 
                         payload=payload, scan_type="Depart", count=count) #send to scan for departure of anyone
 
     def run_rssi_scan(self, kwargs):

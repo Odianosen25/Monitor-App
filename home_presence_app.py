@@ -65,7 +65,7 @@ class HomePresenceApp(ad.ADBase):
         self.hass.listen_event(self.hass_restarted, "plugin_restarted")
         self.adbase.run_in(self.reload_device_state, 5) #reload systems
         self.adbase.run_in(self.load_known_devices, 0) #load up devices for all locations
-        self.adbase.run_in(self.setup_service, 0) #setup service
+        self.setup_service() #setup service
         
     def presence_message(self, event_name, data, kwargs):
         topic = data["topic"]
@@ -505,7 +505,7 @@ class HomePresenceApp(ad.ADBase):
             attributes = {"friendly_name": "Somebody is Home State", "device_class" : "presence"}
             self.hass.set_state(self.somebody_is_home, state="off", attributes=attributes) #send to homeassistant to create binary sensor sensor for home state
     
-    def setup_service(self, kwargs): # rgister services
+    def setup_service(self): # rgister services
         self.mqtt.register_service(f"{self.presence_topic}/remove_known_device", self.presense_services)
         self.mqtt.register_service(f"{self.presence_topic}/run_arrive_scan", self.presense_services)
         self.mqtt.register_service(f"{self.presence_topic}/run_depart_scan", self.presense_services)

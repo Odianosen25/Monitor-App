@@ -749,10 +749,17 @@ class HomePresenceApp(ad.ADBase):
         topic = f"{self.presence_topic}/scan/restart"
         payload = ""
 
-        self.mqtt.mqtt_publish(topic, payload)
+        device = kwargs.get("device")
+
+        if device is None:  # no specific device specified
+            self.mqtt.mqtt_publish(topic, payload)
 
         if self.args.get("remote_monitors") is not None:
             for remote_device, setting in self.args["remote_monitors"].items():
+
+                if device is not None and remote_device != device:
+                    continue
+
                 try:
                     host = setting["host"]
                     username = setting["username"]
@@ -767,6 +774,7 @@ class HomePresenceApp(ad.ADBase):
         """Used to Restart the Hardware Monitor running in"""
         self.adbase.log(f"Restarting {device}'s Hardware")
         import paramiko
+
         try:
             cmd = "sudo reboot now"
             ssh = paramiko.SSHClient()

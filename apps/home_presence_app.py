@@ -434,6 +434,7 @@ class HomePresenceApp(ad.ADBase):
                 " is not set up (no sensors found).",
                 level="WARNING",
             )
+            self.adbase.run_in(self.run_arrive_scan, 0)
             return
 
         rssi_values = {
@@ -476,6 +477,8 @@ class HomePresenceApp(ad.ADBase):
                 " is not set up (no sensors found).",
                 level="WARNING",
             )
+
+            self.adbase.run_in(self.run_arrive_scan, 0)
             return
 
         sensor_res = list(
@@ -753,6 +756,15 @@ class HomePresenceApp(ad.ADBase):
 
         if device is None:  # no specific device specified
             self.mqtt.mqtt_publish(topic, payload)
+
+        else:
+            if device not in self.args.get("remote_monitors", {}):
+                self.adbase.log(
+                    f"Device {device} not defined. So cannot restart it",
+                    level="WARNING",
+                )
+
+                return
 
         if self.args.get("remote_monitors") is not None:
             for remote_device, setting in self.args["remote_monitors"].items():

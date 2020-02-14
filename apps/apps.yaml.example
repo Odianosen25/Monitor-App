@@ -30,3 +30,8 @@ home_presence_app:
       host: !secrets kitchen_monitor_host
       username: !secrets kitchen_monitor_username
       password: !secrets kitchen_monitor_password
+    
+    living_room:
+      host: 192.168.1.xxx
+      username: pi
+      password: raspberry

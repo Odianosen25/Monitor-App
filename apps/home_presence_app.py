@@ -240,14 +240,14 @@ class HomePresenceApp(ad.ADBase):
 
         # RSSI Value for a Known Device:
         if action == "rssi":
-            attributes = {"rssi": payload, "last_reported_by": location}
+            attributes = {"rssi": payload, "last_reported_by": location.replace("_", " ").title()}
             self.adbase.log(
                 f"Recieved an RSSI of {payload} for {device_name} from {location_friendly}",
                 level="INFO",
             )
             self.mqtt.set_state(appdaemon_entity, attributes=attributes)
             self.update_hass_sensor(device_conf_sensor, new_attr={"rssi": payload})
-            self.update_nearest_monitor(device_entity_id)
+            self.update_nearest_monitor(device_name)
             return
 
         # Ignore invalid JSON responses
@@ -327,7 +327,7 @@ class HomePresenceApp(ad.ADBase):
 
         # Set the nearest monitor property if we have a new RSSI.
         if "rssi" in payload_json:
-            self.update_nearest_monitor(device_entity_id)
+            self.update_nearest_monitor(device_name)
 
         if device_state_sensor not in self.all_users_sensors:
             self.all_users_sensors.append(device_state_sensor)
@@ -416,8 +416,9 @@ class HomePresenceApp(ad.ADBase):
         if self.mqtt.get_state(entity_id, copy=False) == "offline":
             self.mqtt.set_state(entity_id, state="online")
 
-    def update_nearest_monitor(self, device_entity_id):
+    def update_nearest_monitor(self, device_name):
         """Determine which monitor the device is closest to based on RSSI value."""
+        device_entity_id = f"{self.presence_name}_{device_name}"
         device_conf_sensors = self.home_state_entities.get(device_entity_id)
 
         if device_conf_sensors is None:
@@ -434,6 +435,7 @@ class HomePresenceApp(ad.ADBase):
             ): self.hass.get_state(loc, attribute="rssi")
             for loc in device_conf_sensors
         }
+
         rssi_values = {
             loc: int(rssi)
             for loc, rssi in rssi_values.items()
@@ -446,12 +448,12 @@ class HomePresenceApp(ad.ADBase):
             self.adbase.log(
                 "{} is closest to {} based on last reported RSSI values".format(
                     device_entity_id, nearest_monitor
-                ),
-                level="INFO",
+                )
             )
+            
         self.update_hass_sensor(
             f"{self.user_device_domain}.{device_entity_id}",
-            new_attr={"nearest_monitor": nearest_monitor},
+            new_attr={"nearest_monitor": nearest_monitor.replace("_", " ").title()},
         )
 
     def confidence_updated(self, entity, attribute, old, new, kwargs):

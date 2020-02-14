@@ -29,7 +29,7 @@ class HomePresenceApp(ad.ADBase):
         self.hass = self.get_plugin_api("HASS")
         self.mqtt = self.get_plugin_api("MQTT")
 
-        self.presence_topic = self.args.get("monitor_topic", "presence")
+        self.presence_topic = self.args.get("monitor_topic", "monitor")
         self.user_device_domain = self.args.get("user_device_domain", "binary_sensor")
 
         # State string to use depends on which domain is in use.
@@ -226,7 +226,7 @@ class HomePresenceApp(ad.ADBase):
             return
         
         if action == "reboot":
-            self.adbase.run_in(self.restart_device, 1, device=location)
+            self.adbase.run_in(self.restart_device, 1, location=location)
             return
 
         device_name = topic_path[self.topic_level + 1]
@@ -756,18 +756,18 @@ class HomePresenceApp(ad.ADBase):
         topic = f"{self.presence_topic}/scan/restart"
         payload = ""
 
-        device = kwargs.get("device") # meaning it needs a device to reboot
+        location = kwargs.get("location") # meaning it needs a device to reboot
 
-        if device is None:  # no specific device specified
+        if location is None:  # no specific location specified
             self.mqtt.mqtt_publish(topic, payload)
 
         else:
-            if device == "all": # reboot everything
-                device = None
+            if location == "all": # reboot everything
+                location = None
 
-            elif device not in self.args.get("remote_monitors", {}):
+            elif location not in self.args.get("remote_monitors", {}):
                 self.adbase.log(
-                    f"Device {device} not defined. So cannot restart it",
+                    f"Location {location} not defined. So cannot restart it",
                     level="WARNING",
                 )
 
@@ -776,7 +776,7 @@ class HomePresenceApp(ad.ADBase):
         if self.args.get("remote_monitors") is not None:
             for remote_device, setting in self.args["remote_monitors"].items():
 
-                if device is not None and remote_device != device:
+                if location is not None and remote_device != location:
                     continue
 
                 try:

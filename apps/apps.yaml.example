@@ -27,9 +27,9 @@ home_presence_app:
   
   remote_monitors:
     kitchen:
-      host: !secrets kitchen_monitor_host
-      username: !secrets kitchen_monitor_username
-      password: !secrets kitchen_monitor_password
+      host: !secret kitchen_monitor_host
+      username: !secret kitchen_monitor_username
+      password: !secret kitchen_monitor_password
     
     living_room:
       host: 192.168.1.xxx

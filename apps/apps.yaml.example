@@ -24,3 +24,9 @@ home_presence_app:
   known_devices:
     - xx:xx:xx:xx:xx:xx Odianosen's iPhone
     - xx:xx:xx:xx:xx:xx Nkiruka's iPad
+  
+  remote_monitors:
+    kitchen:
+      host: !secrets kitchen_monitor_host
+      username: !secrets kitchen_monitor_username
+      password: !secrets kitchen_monitor_password

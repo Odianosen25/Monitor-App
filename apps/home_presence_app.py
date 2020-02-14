@@ -126,6 +126,7 @@ class HomePresenceApp(ad.ADBase):
         # Load the devices from the config.
         self.adbase.run_in(self.reload_device_state, 5)
         self.adbase.run_in(self.load_known_devices, 0)
+        self.setup_service()  # setup service
 
     def setup_global_sensors(self):
         """Add all global home/not_home sensors."""
@@ -240,10 +241,16 @@ class HomePresenceApp(ad.ADBase):
 
         # RSSI Value for a Known Device:
         if action == "rssi":
-            attributes = {"rssi": payload, "last_reported_by": location.replace("_", " ").title()}
+            if topic == "presence/scan/rssi":
+                return
+
+            attributes = {
+                "rssi": payload,
+                "last_reported_by": location.replace("_", " ").title(),
+            }
             self.adbase.log(
                 f"Recieved an RSSI of {payload} for {device_name} from {location_friendly}",
-                level="INFO",
+                level="DEBUG",
             )
             self.mqtt.set_state(appdaemon_entity, attributes=attributes)
             self.update_hass_sensor(device_conf_sensor, new_attr={"rssi": payload})
@@ -446,11 +453,10 @@ class HomePresenceApp(ad.ADBase):
         if rssi_values:
             nearest_monitor = max(rssi_values, key=rssi_values.get)
             self.adbase.log(
-                "{} is closest to {} based on last reported RSSI values".format(
-                    device_entity_id, nearest_monitor
-                )
+                f"{device_entity_id} is closest to {nearest_monitor} based on last reported RSSI values",
+                level="DEBUG",
             )
-            
+
         self.update_hass_sensor(
             f"{self.user_device_domain}.{device_entity_id}",
             new_attr={"nearest_monitor": nearest_monitor.replace("_", " ").title()},
@@ -742,7 +748,42 @@ class HomePresenceApp(ad.ADBase):
         """Send a restart command to the monitor services."""
         topic = f"{self.presence_topic}/scan/restart"
         payload = ""
+
         self.mqtt.mqtt_publish(topic, payload)
+
+        if self.args.get("remote_monitors") is not None:
+            for remote_device, setting in self.args["remote_monitors"].items():
+                try:
+                    host = setting["host"]
+                    username = setting["username"]
+                    password = setting["password"]
+                    self.restart_hardware(remote_device, host, username, password)
+                except Exception as e:
+                    self.adbase.error(
+                        f"Could not restart {remote_device}, due to {e}", level="ERROR"
+                    )
+
+    def restart_hardware(self, device, host, username, password):
+        """Used to Restart the Hardware Monitor running in"""
+        self.adbase.log(f"Restarting {device}'s Hardware")
+        import paramiko
+        try:
+            cmd = "sudo reboot now"
+            ssh = paramiko.SSHClient()
+            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            ssh.connect(host, username=username, password=password)
+            stdin, stdout, stderr = ssh.exec_command(cmd)
+            completed = stdout.readlines()
+            ssh.close()
+            self.adbase.log(
+                f"{device} Hardware reset completed with result {completed}",
+                level="DEBUG",
+            )
+
+        except Exception as e:
+            self.adbase.error(
+                f"Could not restart {device} Monitor Hardware due to {e}", level="ERROR"
+            )
 
     def clear_location_entities(self, kwargs):
         """Clear sensors from an offline location.
@@ -758,9 +799,9 @@ class HomePresenceApp(ad.ADBase):
             for sensor in entity_list:
                 if location in sensor:  # that sensor belongs to that location
                     self.update_hass_sensor(sensor, 0)
-                    device_entity_prefix = sensor.replace(f"sensor.{self.presence_topic}_", "").replace(
-                        "_conf", ""
-                    )
+                    device_entity_prefix = sensor.replace(
+                        f"sensor.{self.presence_topic}_", ""
+                    ).replace("_conf", "")
 
                     appdaemon_entity = f"{self.presence_name}.{device_entity_prefix}"
                     self.mqtt.set_state(appdaemon_entity, state=0, rssi="-99")
@@ -825,7 +866,8 @@ class HomePresenceApp(ad.ADBase):
     def hass_restarted(self, event_name, data, kwargs):
         """Respond to a HASS Restart."""
         self.setup_global_sensors()
-        self.adbase.run_in(self.reload_device_state, 10)
+        # self.adbase.run_in(self.reload_device_state, 10)
+        self.adbase.run_in(self.restart_device, 5)
 
     def setup_service(self):  # rgister services
         """Register services for app"""

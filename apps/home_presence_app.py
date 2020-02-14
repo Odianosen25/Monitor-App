@@ -182,7 +182,7 @@ class HomePresenceApp(ad.ADBase):
                 replace=True,
             )
             return
-
+        
         # Determine which scanner initiated the message
         location = "unknown"
         if isinstance(payload_json, dict) and "identity" in payload_json:
@@ -223,6 +223,10 @@ class HomePresenceApp(ad.ADBase):
         # Response to Echo Check of Scanner
         if action == "echo":
             self.handle_echo(location=location, payload=payload)
+            return
+        
+        if action == "reboot":
+            self.adbase.run_in(self.restart_device, 1, device=location)
             return
 
         device_name = topic_path[self.topic_level + 1]
@@ -752,13 +756,16 @@ class HomePresenceApp(ad.ADBase):
         topic = f"{self.presence_topic}/scan/restart"
         payload = ""
 
-        device = kwargs.get("device")
+        device = kwargs.get("device") # meaning it needs a device to reboot
 
         if device is None:  # no specific device specified
             self.mqtt.mqtt_publish(topic, payload)
 
         else:
-            if device not in self.args.get("remote_monitors", {}):
+            if device == "all": # reboot everything
+                device = None
+
+            elif device not in self.args.get("remote_monitors", {}):
                 self.adbase.log(
                     f"Device {device} not defined. So cannot restart it",
                     level="WARNING",

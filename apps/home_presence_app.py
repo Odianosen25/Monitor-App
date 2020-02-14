@@ -762,6 +762,7 @@ class HomePresenceApp(ad.ADBase):
             self.mqtt.mqtt_publish(topic, payload)
 
         else:
+            location = location.lower().replace(" ", "_")
             if location == "all": # reboot everything
                 location = None
 

@@ -94,28 +94,28 @@ Service Calls:
 --------------
 This app supports the use of some service calls, which can be useful if wanting to use execute some commands in the app from other AD apps. An example service call is `self.call_service("monitor/remove_known_device", device="xx:xx:xx:xx:xx:xx", namespace=mqtt)`. The domain is determined by the specifed `monitor_topic`. Below is listed the supported service calls
 
-# remove_known_device
+### remove_known_device
 Used to remove a known device from all the nodes. The device's MAC address should be supplied in the service call
 
-# run_arrive_scan
+### run_arrive_scan
 Used to instruct the app to execute an arrival scan on all nodes
 
-# run_depart_scan
+### run_depart_scan
 Used to instruct the app to execute a depart scan on all nodes. If wanting to execute it immediately, pass a parameter `scan_Delay=0` in the call. If not, the defined `depart_check_time` will be used as the delay before running the scan
 
-# run_rssi_scan
+### run_rssi_scan
 Used to instruct the app to execute an rssi scan on all nodes
 
-# restart_device
+### restart_device
 Used to instruct the app to execute a restart of the script on all nodes. If a node has its login detail in `remote_monitors` it will attempt to reboot the hardware itself
 
-# reload_device_state
+### reload_device_state
 Used to instruct the app to have the nodes report the state of their devices
 
-# load_known_devices
+### load_known_devices
 Used to instruct the app to have the nodes setup the known devices as specified in the app's configuration
 
-# clear_location_entities
+### clear_location_entities
 Used to instruct the app to set all entities in a predefined location to 0, indicating that no device is seen by that node
 
 To maximise the app, it will be advisable to setup the system in the home as follows:

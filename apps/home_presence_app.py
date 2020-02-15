@@ -90,6 +90,7 @@ class HomePresenceApp(ad.ADBase):
             self.hass.listen_state(self.motion_detected, motion_sensor)
 
         # Uncomment to restart the monitor systems every night at midnight
+        # if "remote_monitors" specifed, it will lead to the hardward also being rebooted
         # time = "00:00:01"
         # self.adbase.run_daily(self.restart_device, time)
 
@@ -174,21 +175,22 @@ class HomePresenceApp(ad.ADBase):
             pass
 
         # Handle request for immediate scan via MQTT
-        if action == "ad_scan_now":
-            self.mqtt.set_state(
-                self.monitor_entity,
-                state="scan",
-                attributes={"locations": [], "scan_type": payload},
-                replace=True,
+        # can be arrive/depart/rssi
+        if action == "run_scan":
+            # add scan_delay=0 to ensure its done immediately
+            self.mqtt.call_service(
+                f"{self.presence_topic}/run_{payload.lower()}_scan", scan_delay=0
             )
             return
-        
+
         # Determine which scanner initiated the message
         location = "unknown"
         if isinstance(payload_json, dict) and "identity" in payload_json:
             location = payload_json.get("identity", "unknown")
+
         elif len(topic_path) > self.topic_level + 1:
             location = topic_path[self.topic_level]
+
         location = location.replace(" ", "_").lower()
         location_friendly = location.replace("_", " ").title()
 
@@ -224,7 +226,8 @@ class HomePresenceApp(ad.ADBase):
         if action == "echo":
             self.handle_echo(location=location, payload=payload)
             return
-        
+
+        # Handle request for reboot of hardware
         if action == "reboot":
             self.adbase.run_in(self.restart_device, 1, location=location)
             return
@@ -245,7 +248,7 @@ class HomePresenceApp(ad.ADBase):
 
         # RSSI Value for a Known Device:
         if action == "rssi":
-            if topic == "presence/scan/rssi":
+            if topic == f"{self.presence_topic}/scan/rssi":
                 return
 
             attributes = {
@@ -756,14 +759,14 @@ class HomePresenceApp(ad.ADBase):
         topic = f"{self.presence_topic}/scan/restart"
         payload = ""
 
-        location = kwargs.get("location") # meaning it needs a device to reboot
+        location = kwargs.get("location")  # meaning it needs a device to reboot
 
         if location is None:  # no specific location specified
             self.mqtt.mqtt_publish(topic, payload)
 
         else:
             location = location.lower().replace(" ", "_")
-            if location == "all": # reboot everything
+            if location == "all":  # reboot everything
                 location = None
 
             elif location not in self.args.get("remote_monitors", {}):
@@ -822,7 +825,9 @@ class HomePresenceApp(ad.ADBase):
         and therefore lead to false info.
         """
         location = kwargs.get("location")
-        self.adbase.log("Processing System Unavailable for " + location)
+        self.adbase.log(
+            "Processing System Unavailable for " + location.replace("_", " ").title()
+        )
         for _, entity_list in self.home_state_entities.items():
             for sensor in entity_list:
                 if location in sensor:  # that sensor belongs to that location
@@ -839,7 +844,7 @@ class HomePresenceApp(ad.ADBase):
             self.location_timers.pop(location)
 
         entity_id = f"{self.presence_name}.{location}"
-        self.mqtt.set_state(entity_id, state="Offline")
+        self.mqtt.set_state(entity_id, state="offline")
 
     def system_state_changed(self, entity, attribute, old, new, kwargs):
         """Respond to a change in the system state."""
@@ -875,7 +880,7 @@ class HomePresenceApp(ad.ADBase):
             )
             timer += 15
 
-    def remove_known_device(self, **kwargs):
+    def remove_known_device(self, kwargs):
         """Request all known devices in config to be deleted from monitors."""
         device = kwargs["device"]
         self.adbase.run_in(
@@ -932,6 +937,9 @@ class HomePresenceApp(ad.ADBase):
         )
 
         func = getattr(self, service)  # get the function first
+
+        if func is None:
+            raise ValueError(f"Unsupported service call {service}")
 
         if service == "remove_known_device" and "device" not in kwargs:
             self.adbase.log(

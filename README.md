@@ -31,6 +31,65 @@ When developing this app, 4 main things were my target:
 - Speed: To improve in speed, the app makes use of an internal feature, whereby the app instructs the system to carryout an arrival or departure scans based on if someone enters or leaves the house and if everyone home or not. This made possible without need of forcing the monitor system to scan more frequently and thereby reducing impact on WiFi and other wireless equipment :relieved:
 - Lastly and most especially Reliability: It was important false positives/negatives are eliminated in the way the system runs. So the app tries to build in some little time based buffers here and there :grimacing:
 
+#### Example Configuration
+```yaml
+# Creates all notifications
+home_presence_app:
+  module: home_presence_app
+  class: HomePresenceApp
+  plugin: 
+    - HASS
+    - MQTT
+  #monitor_topic: presence
+  depart_check_time: 30
+  minimum_confidence: 60
+  not_home_timeout: 15
+  system_check: 30
+  system_timeout: 60
+  home_gateway_sensors:
+    - binary_sensor.main_door_contact
+    
+  home_motion_sensors:
+    - binary_sensor.living_room_motion_sensor_occupancy
+    - binary_sensor.kitchen_motion_sensor_occupancy
+    - binary_sensor.hallway_motion_sensor_occupancy
+    
+  #log_level: DEBUG
+  known_devices:
+    - xx:xx:xx:xx:xx:xx Odianosen's iPhone
+    - xx:xx:xx:xx:xx:xx Nkiruka's iPad
+  
+  remote_monitors:
+    kitchen:
+      host: !secret kitchen_monitor_host
+      username: !secret kitchen_monitor_username
+      password: !secret kitchen_monitor_password
+    
+    living_room:
+      host: 192.168.1.xxx
+      username: pi
+      password: raspberry
+  
+```
+
+#### App Configuration
+key | optional | type | default | description
+-- | -- | -- | -- | --
+`module` | False | string | home_presence_app | The module name of the app.
+`class` | False | string | HomePresenceApp | The name of the Class.
+`plugin` | True | list | | The plugins at if restarted, the app should restart.
+`monitor_topic` | True | string | `monitor` | The topic level topic used by the monitor nodes.
+`depart_check_time` | True | int | 30 | Delay in seconds, before depart scan is ran. This depends on how long it takes the user to leave the door and not being picked up by a monitor node.
+`minimum_confidence` | True | int | 50 | Minimum confidence required across all nodes, for a device to be considered departed.
+`not_home_timeout` | True | int | 15 | Time in seconds a device has to be considered away, before registering it deaprted by the app.
+`system_check`| True | int | 30 | Time in seconds, for the app to check the availablity of each monitor node.
+`system_timeout`| True | int | 60 | Time in seconds, for a monitor node not to respond to system check for it to be considered offline. If this happens, and the node's login details is specified under `remote_monitors`, the node will be rebooted
+`home_gateway_sensors`| True | list |  | List of gateway sensors, which can be used by the app to instruct the nodes based on their state if to run a arrive/depart scan. If all home, only depart scan is ran. If all away, arrive scan is ran, and if neither both scans are ran.
+`home_motion_sensors`| True | list |  | List of motion sensors, which can be used by the app to instruct the nodes based on their state if to run rssi scan.
+`known_devices`| True | list |  | List of known devices that are to be loaded into all the nodes on the network
+`remote_monitors`| True | dict |  | Dictionary of the nodes on the network that the app is allowed to reboot. These nodes will be rebooted when it fails the `system_timeout` check, or when the `restart_device` service call is executed. The `host`, `username` and `password` of each node must be specified
+`log_level` | True | `'INFO'` &#124; `'DEBUG'` | `'INFO'` | Switches log level.
+
 To maximise the app, it will be advisable to setup the system in the home as follows:
 -------------------------------------------------------------------------------------
 

@@ -1,9 +1,10 @@
 """AppDaemon App For use with Monitor Bluetooth Presence Detection Script.
 
 apps.yaml parameters:
-| - monitor_topic (default 'presence'): MQTT Topic monitor.sh script publishes to
+| - monitor_topic (default 'monitor'): MQTT Topic monitor.sh script publishes to
+| - mqtt_event (default 'MQTT_MESSAGE'): MQTT event name as specified in the plugin setting 
 | - not_home_timeout (default 30s): Time interval before declaring not home
-| - minimum_confidence (default 90): Minimum Confidence Level to consider home
+| - minimum_confidence (default 50): Minimum Confidence Level to consider home
 | - depart_check_time (default 30s): Time to wait before running depart scan
 | - system_timeout (default 90s): Time for system to report back from echo
 | - system_check (default 30s): Time interval for checking if system is online
@@ -13,6 +14,7 @@ apps.yaml parameters:
 | - user_device_domain: Use "binary_sensor" or "device_tracker" domains.
 | - known_devices: Known devices to be added to each monitor.
 | - known_beacons: Known Beacons to monitor.
+| - remote_monitors: login details of remote monitors that can be hardware rebooted
 """
 import json
 import datetime
@@ -49,7 +51,7 @@ class HomePresenceApp(ad.ADBase):
         self.presence_name = self.presence_topic.split("/")[-1]
 
         self.timeout = self.args.get("not_home_timeout", 30)
-        self.minimum_conf = self.args.get("minimum_confidence", 90)
+        self.minimum_conf = self.args.get("minimum_confidence", 50)
         self.depart_check_time = self.args.get("depart_check_time", 30)
         self.system_timeout = self.args.get("system_timeout", 60)
         system_check = self.args.get("system_check", 30)

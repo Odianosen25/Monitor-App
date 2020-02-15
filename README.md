@@ -31,7 +31,7 @@ When developing this app, 4 main things were my target:
 - Speed: To improve in speed, the app makes use of an internal feature, whereby the app instructs the system to carryout an arrival or departure scans based on if someone enters or leaves the house and if everyone home or not. This made possible without need of forcing the monitor system to scan more frequently and thereby reducing impact on WiFi and other wireless equipment :relieved:
 - Lastly and most especially Reliability: It was important false positives/negatives are eliminated in the way the system runs. So the app tries to build in some little time based buffers here and there :grimacing:
 
-#### Example Configuration
+### Example Configuration
 ```yaml
 # Creates all notifications
 home_presence_app:
@@ -72,7 +72,7 @@ home_presence_app:
   
 ```
 
-#### App Configuration
+### App Configuration
 key | optional | type | default | description
 -- | -- | -- | -- | --
 `module` | False | string | home_presence_app | The module name of the app.
@@ -92,7 +92,12 @@ key | optional | type | default | description
 
 Service Calls:
 --------------
-This app supports the use of some service calls, which can be useful if wanting to use execute some commands in the app from other AD apps. An example service call is `self.call_service("monitor/remove_known_device", device="xx:xx:xx:xx:xx:xx", namespace=mqtt)`. The domain is determined by the specifed `monitor_topic`. Below is listed the supported service calls
+This app supports the use of some service calls, which can be useful if wanting to use execute some commands in the app from other AD apps. An example service call is 
+
+```python
+self.call_service("monitor/remove_known_device", device="xx:xx:xx:xx:xx:xx", namespace=mqtt)
+```
+The domain is determined by the specifed `monitor_topic`. Below is listed the supported service calls
 
 ### remove_known_device
 Used to remove a known device from all the nodes. The device's MAC address should be supplied in the service call

@@ -33,7 +33,6 @@ When developing this app, 4 main things were my target:
 
 ### Example Configuration
 ```yaml
-# Creates all notifications
 home_presence_app:
   module: home_presence_app
   class: HomePresenceApp
@@ -122,6 +121,19 @@ Used to instruct the app to have the nodes setup the known devices as specified 
 
 ### clear_location_entities
 Used to instruct the app to set all entities in a predefined location to 0, indicating that no device is seen by that node
+
+MQTT Commands:
+--------------
+This app supports the ability to send commands to it over MQTT. This can be very useful, if wanting to execute specific functions from an external system like HA or any hub that supports MQTT. Outline below are the supported MQTT topics and the payload commands:
+
+### monitor/run_scan
+This topic is listened to by the app, and when a message is received it will execute the required command. Supported commands on this topic are as follows
+ - `arrive`: This will run the arrive scan immediately
+ - `depart`: This will run the depart scan immedaiely
+ - `rssi`: This will run the rssi scan immediately
+ 
+### monitor/location/reboot
+ This topic is used by the app to reboot a remote monitor node. The `location` parmeter can be a any of the declared nodes in `remote_monitors`. So if wanting to say reboot only the living room's node, simply send an empty payload to `monitor/living room/reboot`. if the location is `all`, that is an empty payload is sent to `monitor/all/reboot`, this will reboot all the delared remote_monitor nodes.
 
 To maximise the app, it will be advisable to setup the system in the home as follows:
 -------------------------------------------------------------------------------------

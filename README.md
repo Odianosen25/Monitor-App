@@ -17,8 +17,8 @@ This app can be added to an Appdaemon system, which will help to auto generate e
 - Generates entities within AD, which has all the data published by the script per device, and can be listened to in other Apps for other automation reasons. For example `rssi` readings based on devices.
 - Constantly checks for all installed scripts on the network, to ensure which is online. If any location doesn't respond after a set time `system_timeout`, it sets all entities generated from that location to `0`. This is very useful if for example, as system reported a device confidence of `100`, then it went down. The device will stay at `100` even if the user had left the house, which will lead to wrong state.
 - Requests all devices update from the scripts on the network on a system restart
-- Determines the closest monitor system in an area with more than one, and adds that to the generated user binary sensor. - contributed by `shbatm <https://github.com/shbatm>`__ 
-- Supports the use of external MQTT command to instruct the app to carry out some instructions. - contributed by `shbatm <https://github.com/shbatm>`__ 
+- Determines the closest monitor system in an area with more than one, and adds that to the generated user binary sensor. - contributed by [shbatm](https://github.com/shbatm)
+- Supports the use of external MQTT command to instruct the app to carry out some instructions. - contributed by [shbatm](https://github.com/shbatm)
 - Has the ability to hardware reboot remote monitor systems, as its known that after a while the Pi monitor is running on can get locked and the script doesn't work as efficiently. So instead of simply restarting the script, the app can be set to reboot the hardware. This can also be done via mqtt by sending an empty payload to `monitor/<location>/reboot`. 
 - Has service calls within AD, that allows a user to execute its functions from other AD apps
 - Use motion sensors to update RSSI values in the home, so when users move the `nearest_monitor` can be updated

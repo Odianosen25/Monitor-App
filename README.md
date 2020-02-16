@@ -79,6 +79,9 @@ home_presence_app:
     - xx:xx:xx:xx:xx:xx Odianosen's iPhone
     - xx:xx:xx:xx:xx:xx Nkiruka's iPad
   
+  known_beacons:
+    - xx:xx:xx:xx:xx:xx Odianosen's Car Keys
+  
   remote_monitors:
     kitchen:
       host: !secret kitchen_monitor_host
@@ -112,6 +115,7 @@ key | optional | type | default | description
 `home_gateway_sensors`| True | list |  | List of gateway sensors, which can be used by the app to instruct the nodes based on their state if to run a arrive/depart scan. If all home, only depart scan is ran. If all away, arrive scan is ran, and if neither both scans are ran.
 `home_motion_sensors`| True | list |  | List of motion sensors, which can be used by the app to instruct the nodes based on their state if to run rssi scan.
 `known_devices`| True | list |  | List of known devices that are to be loaded into all the nodes on the network
+`known_beacons`| True | list |  | List of known beacons that data received from them by the app from the nodes, are to be processed by the app
 `remote_monitors`| True | dict |  | Dictionary of the nodes on the network that the app is allowed to reboot. These nodes will be rebooted when it fails the `system_timeout` check, or when the `restart_device` service call is executed. The `host`, `username` and `password` of each node must be specified
 `log_level` | True | `'INFO'` &#124; `'DEBUG'` | `'INFO'` | Switches log level.
 

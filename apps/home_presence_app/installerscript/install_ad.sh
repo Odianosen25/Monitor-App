@@ -63,11 +63,11 @@ echo -e "\e[0m"
 sudo mkdir Monitor-App/apps
 sudo mkdir Monitor-App/apps/home_precence_app
 sudo mkdir Monitor-App/apps/home_precence_app/install
-sudo cp ~/tmp/ 	home_presence_app.py ~/Monitor-App/apps/home_precence_app/home_presence_app.py
+sudo cp ~/tmp/home_presence_app.py ~/Monitor-App/apps/home_precence_app/home_presence_app.py
 sudo cp ~/tmp/appdaemon@appdaemon.service ~/Monitor-App/apps/home_precence_app/install/appdaemon@appdaemon.service
 sudo cp ~/tmp/appdaemon.yaml ~/Monitor-App/apps/home_precence_app/install/appdaemon.yaml
 sudo cp ~/tmp/apps.yaml ~/Monitor-App/apps/home_precence_app/install/apps.yaml
-sudo cp ~/tmp/install_part2.sh ~/Monitor-App/apps/home_precence_app/install/install_part2.sh
+sudo cp ~/tmp/install_ad_part2.sh ~/Monitor-App/apps/home_precence_app/install/install_ad_part2.sh
 ######################  END REMOVED  #######################
 
 #Create User appdaemon
@@ -122,7 +122,7 @@ fi
 #fi
 
 # Prepare installation part 2 file
-if sudo cp ~/Monitor-App/apps/home_precence_app/install/install_part2.sh ~/install_part2.sh;
+if sudo cp ~/Monitor-App/apps/home_precence_app/install/install_ad_part2.sh ~/install_ad_part2.sh;
 then
     echo -e "\e[32mPreparation of installation part 2 | Done\e[0m"
 else
@@ -130,7 +130,7 @@ else
     exit;
 fi
 
-if sudo chmod +x ~/install_part2.sh;
+if sudo chmod +x install_ad_part2.sh;
 then
     echo -e "\e[32mDone\e[0m"
 else
@@ -143,7 +143,7 @@ echo " "
 echo " "
 echo -e "\e[32mType: \e[96msudo -u appdaemon -H -s\e[0m"
 echo " "
-echo -e "\e[32mThen to continue installation, type: \e[96mbash install_part2.sh\e[0m"
+echo -e "\e[32mThen to continue installation, type: \e[96mbash install_ad_part2.sh\e[0m"
 echo " "
 echo " "
 echo " "

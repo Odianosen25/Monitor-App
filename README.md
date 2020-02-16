@@ -1,44 +1,36 @@
 # Monitor-Appdaemon-App
 Appdaemon App for [Andrew's Monitor Presence Detection System](https://github.com/andrewjfreyer/monitor).
 
-The Monitor Presence Detection system, is a Bash script `monitor.sh` created by [Andrew Freyer](https://github.com/andrewjfreyer), which is designed to run on a Linux system like the Raspberry Pi. It is designed to be used as a distributed system, having multiple nodes within the environment it is functioning to ensure total coverage. These nodes/systems are used to detect the presence of Bluetooth devices, using the Bluetooth adapter on the node. It works by reporting the detected devices to an MQTT broker, which can then be integrated into an automation hub like Home-Assistant. More details about the script, how it functions and setup can be found by following the link above. This App is designed to maximise the use of the detection system, so that the user can easily have it integrated into their system with as less effort as possible, no matter the number of users or nodes in place.
+The Monitor Presence Detection system, is a Bash script `monitor.sh` created by [Andrew Freyer](https://github.com/andrewjfreyer), which is designed to run on multiple Linux systems like the Raspberry Pi around the home, to detect if persons are near or not. It is designed to be used as a distributed system, having multiple systems/nodes within the environment it is functioning to ensure total coverage. These nodes/systems detect the presence of Bluetooth devices, using the Bluetooth adapter on the node to determine if a phone/watch/beacon etc is near and then reports the state from the device on a person (near or not) to a MQTT Broker. The reported state can then be integrated into an automation hub like Home-Assistant. More details about the script, how it functions and setup can be found by following the link above. This App is designed to maximise the use of the detection system, so that the user can easily have it integrated into their system with as less effort as possible, no matter the number of users or nodes in place.
 
-This app can be added to an Appdaemon system, which will help to auto generate entities for presence detection based on the Monitor script. With this app, all the user has to do, is to add the app to his AD instance, set it up and all entities and devices will be generated in HA, no matter the number of monitor systems running on that location. How to setup the monitor (not presence) system can be seen in the link above, and what this app does is simply to make it easy to integrate it into HA and AD. 
+What this app does is simply to make it easy to integrate the Monitor system into HA and AD. This app can be added to an Appdaemon system, which will help to auto generate entities for presence detection based on the Monitor script. With this app, all the user has to do, is to add the app to his AD instance, set it up and all entities and devices will be generated in HA, no matter the number of monitor systems running in that location or Bluetooth devices to be detected.
 
 ## Features
 - Generates sensors in HA and AD for the following
-    - Sensors of the Confidence levels for each device based on each location. So if you have 3 presence systems, each known device will       have 3 confidence sensors with the names sensor.<monitor_name><device name>_location_conf. in AD it is <monitor_name>.<device name>_location in the `mqtt` namespace
+    - Sensors of the Confidence levels for each Bluetooth device like phone/watch/beacon etc based on each location. So if you have 3 presence systems, each known device will have 3 confidence sensors with the names sensor.<monitor_name><device name>_location_conf. in AD it is <monitor_name>.<device name>_location in the `mqtt` namespace
     - Binary Sensors for each device. So no matter the number of location sensors you have, only one is generated and this is a presence       sensor. The sensor entity_id will be binary_sensor.<monitor_name><device name>. So if one has an entry in the known_static_address as       xx:xx:xx:xx:xx:xx odianosen's iphone it will generate `binary_sensor.monitor_odianosens_iphone_s`
     - If wanting to use `device_trackers`, it is possible to config the app to use `device_tracker` instead of `binary_sensors` for each device. The app will update the state as required; that is use `home`/`not_home` instead of `on`/`off`. - contributed by [shbatm](https://github.com/shbatm)
     - Binary sensors for when everyone is in `binary_sensor.everyone_home`, when everyone is out `binary_sensor.everyone_not_home`.     These sensors are set to ON or OFF  depending on declared users in the apps.yaml file users_sensors are in or out. If some are in and some out, both will be OFF, but another sensor `binary_sensor.somebody_is_home` can be used. This is handy for other automation rules.
     - The name of the sensors for `everyone_home`, `everyone_not_home` and `someone_is_home` can be modified to use other names as required. - contributed by [shbatm](https://github.com/shbatm)
 - If a device is seen to be below the configured minimum confidence minimum_confidence level across all locations which defaults to 50,   a configurable not_home_timeout is ran before declaring the user device is not home in HA using the binary sensor generated for that     device.
 - When one of the declared gateway_sensors in the apps.yaml is opened, based on who is in the house it will send a scan instruction to     the monitor system.
-- Before sending the scan instruction, it first checks for if the system is busy scanning. With the new upgrade to the script, this is     not really needed. But (though preferred) if the user was to activate `PREF_MQTT_REPORT_SCAN_MESSAGES` to `true` in preferences, it can still use it
+- Before sending the scan instruction, it first checks for if the system is busy scanning. With the new upgrade to monitor by Andrew, this is not really needed. But (though preferred) if the user was to activate `PREF_MQTT_REPORT_SCAN_MESSAGES` to `true` in preferences, it can still use it
 - If no gateway sensors are specified, it will send scan instructions every 1 minute. This negates the experience for quick detection, so it is highly recommended to make use of at least a single gateway sensor.
-- Ability to define the `known_devices` in a single place within AD, which is then loaded to all monitor systems on the network. This can be useful, if having multiple monitor systems, and need to manage all `known_devices` from a single place, instead of having to change it in all systems individually.
-- Generates entities within AD, which has all the data published by the script per device, and can be listened to in other Apps for other automation reasons. For example `rssi` readings based on devices.
-- Constantly checks for all installed scripts on the network, to ensure which is online. If any location doesn't respond after a set time `system_timeout`, it sets all entities generated from that location to `0`. This is very useful if for example, as system reported a device confidence of `100`, then it went down. The device will stay at `100` even if the user had left the house, which will lead to wrong state.
-- Requests all devices update from the scripts on the network on a system restart
-- Determines the closest monitor system in an area with more than one, and adds that to the generated user binary sensor. - contributed by [shbatm](https://github.com/shbatm)
-- Supports the use of external MQTT command to instruct the app to carry out some instructions. - contributed by [shbatm](https://github.com/shbatm)
-- Has the ability to hardware reboot remote monitor systems, as its known that after a while the Pi monitor is running on can get locked and the script doesn't work as efficiently. So instead of simply restarting the script, the app can be set to reboot the hardware. This can also be done via mqtt by sending an empty payload to `monitor/<location>/reboot`. 
+- Ability to define the `known_devices` in a single place within AD, which is then loaded to all monitor nodes on the network. This can be useful, if having multiple nodes, and need to manage all `known_devices` from a single place, instead of having to change it in all nodes individually.
+- Generates entities within AD, which has all the data published by the node per device, and can be listened to in other Apps for other automation reasons. For example `rssi` readings based on devices.
+- Constantly checks for all installed monitor nodes on the network, to ensure which is online. If any location doesn't respond after a set time `system_timeout`, it sets all entities generated from that location to `0`. This is very useful if for example, a node reported a device confidence of `100`, then it went down. The device will stay at `100` even if the user had left the house, which will lead to wrong state.
+- Requests all devices update from the nodes on the network on a system restart
+- Determines the closest monitor node in an area with more than one, and adds that to the generated user binary sensor. - contributed by [shbatm](https://github.com/shbatm)
+- Supports the use of external MQTT command to instruct the app to executes some tasks like `arrive` scan or hardware reboot. - contributed by [shbatm](https://github.com/shbatm)
+- Has the ability to hardware reboot remote monitor nodes, as its known that after a while the Pi monitor is running on can get locked and the script doesn't work as efficiently. So instead of simply restarting the script, the app can be set to reboot the hardware. This can also be done via mqtt by sending an empty payload to `monitor/<location>/reboot`. More explanation below
 - Has service calls within AD only, that allows a user to execute its functions from other AD apps
-- Use motion sensors to update RSSI values in the home, so when users move the `nearest_monitor` can be updated
-
-When developing this app, 4 main things were my target:
--------------------------------------------------------
-
-- Ease of use: The user should only setup the monitor system/s, and no matter the number of locations involved, it should be up and running without virtually any or minimal extra work needed. The idea of editing the configuration.yaml file for sensors, automation and input_boolean as in the example to use this great system was almost a put off for me. And once one’s system grows, it exponentially takes more work to setup and debug :persevere:.
-- Scalability: No matter the number of users or gateways or monitor systems in place, whether its small like mine which is 3, 1 & 2 respectively or you have 30, 10 and 20 respectively (if possible), it should take virtually the same amount of work to be up and running when using this app :smirk:
-- Speed: To improve in speed, the app makes use of an internal feature, whereby the app instructs the system to carry out an arrival or departure scans based on if someone enters or leaves the house and if everyone home or not. This made possible without need of forcing the monitor system to scan more frequently and thereby reducing impact on WiFi and other wireless equipment :relieved:
-- Lastly and most especially Reliability: It was important false positives/negatives are eliminated in the way the system runs. So the app tries to build in some little time based buffers here and there :grimacing:
-
+- Use motion sensors to update Received Signal Strength Indication (RSSI) values in the home, so when users move the `nearest_monitor` can be updated
+    
 To use the app, it is required to setup the system in the home as follows:
 --------------------------------------------------------------------------
 
-- Use Appdaemon >= 4.0 (of course :roll_eyes:)
-- Make use of the Appdaemon MQTT plugin. How to setup the MQTT plugin in AD can be seen via this [link](https://appdaemon.readthedocs.io/en/latest/CONFIGURE.html#configuration-of-the-mqtt-plugin). A simple plugin configuration sufficient for this app, in the `appdaemon.yaml` file is seen below.
+- Have [Home Assistant](https://www.home-assistant.io/getting-started/) and [Appdaemon](https://appdaemon.readthedocs.io/en/latest/INSTALL.html) >= 4.0 running (of course :roll_eyes:)
+- Make use of the Appdaemon MQTT plugin alongside that of HASS. How to setup the MQTT plugin in AD can be seen via this [link](https://appdaemon.readthedocs.io/en/latest/CONFIGURE.html#configuration-of-the-mqtt-plugin). A simple plugin configuration sufficient for this app, in the `appdaemon.yaml` file is seen below.
     ```yaml
     plugins:
         HASS:
@@ -53,9 +45,18 @@ To use the app, it is required to setup the system in the home as follows:
            client_user: username
            client_password: password
     ```
-- Have a single main sensor, which runs as `monitor.sh -tdr -a -b` in a location that users stay more often in line with @andrewjfreyer example setup. If having more than 1 monitor, have the rest run as `monitor.sh -tad -a -b` so they only scan on trigger for both arrival and departure.
-- In the main sensor, have good spacing between scans, not only to avoid unnecessarily flooding your environment with scans but also allowing the app to take over scans intermittently. I have mine set at 120 secs throughout for now
+- Have at least a single main node, which runs as `monitor.sh -tdr -a -b` in a location that users stay more often in line with @andrewjfreyer example setup. If having more than 1 monitor, have the rest run as `monitor.sh -tad -a -b` so they only scan on trigger for both arrival and departure.
+- In the main node, have good spacing between scans, not only to avoid unnecessarily flooding your environment with scans but also allowing the app to take over scans intermittently. I have mine set at 120 secs throughout for now
 - Have sensors at the entrances into the home which I termed `gateways`, whether it be doors or garages. Windows also for those that use it :wink:
+
+
+When developing this app, 4 main things were my target:
+-------------------------------------------------------
+
+- Ease of use: The user should only setup the monitor system/s, and no matter the number of locations involved, it should be up and running without virtually any or minimal extra work needed. The idea of editing the configuration.yaml file for sensors, automation and input_boolean as in the example to use this great system was almost a put off for me. And once one’s system grows, it exponentially takes more work to setup and debug :persevere:.
+- Scalability: No matter the number of users or gateways or monitor nodes in place, whether its small like mine which is 3, 1 & 2 respectively or you have 30, 10 and 20 respectively (if possible), it should take virtually the same amount of work to be up and running when using this app :smirk:
+- Speed: To improve in speed, the app makes use of an internal feature, whereby the app instructs the system to carry out an arrival or departure scans based on if someone enters or leaves the house and if everyone home or not. This made possible without need of forcing the monitor system to scan more frequently and thereby reducing impact on WiFi and other wireless equipment :relieved:
+- Lastly and most especially Reliability: It was important false positives/negatives are eliminated in the way the system runs. So the app tries to build in some little time based buffers here and there :grimacing:
 
 ### Example Simple Configuration
 ```yaml
@@ -113,8 +114,8 @@ home_presence_app:
     
     living_room:
       host: 192.168.1.xxx
-      username: pi
-      password: raspberry
+      username: !secret living_room_monitor_username
+      password: !secret living_room_monitor_password
   
 ```
 
@@ -154,11 +155,15 @@ The domain is determined by the specified `monitor_topic`. Below is listed the s
 ### remove_known_device
 Used to remove a known device from all the nodes. The device's MAC address should be supplied in the service call
 
+```python
+self.call_service("monitor/remove_known_device", device="xx:xx:xx:xx:xx:xx", namespace=mqtt)
+```
+
 ### run_arrive_scan
 Used to instruct the app to execute an arrival scan on all nodes
 
 ```python
-self.call_service("presensce/run_arrive_scan", namespace=mqtt)
+self.call_service("presence/run_arrive_scan", namespace=mqtt)
 ```
 
 ### run_depart_scan
@@ -166,7 +171,7 @@ Used to instruct the app to execute a depart scan on all nodes. If wanting to ex
 
 ```python
 # run depart scan in 10 seconds time
-self.call_service("presensce/run_arrive_scan", scan_delay=10, namespace=mqtt)
+self.call_service("presence/run_arrive_scan", scan_delay=10, namespace=mqtt)
 ```
 
 ### run_rssi_scan
@@ -177,7 +182,7 @@ self.call_service("monitor/run_rssi_scan", namespace=mqtt)
 ```
 
 ### restart_device
-Used to instruct the app to execute a restart of the script on all nodes. If a node has its login detail in `remote_monitors` it will attempt to reboot the hardware itself. To reboot a particular node in a location, specify the `location` parameter. This same location, should be used in defining the node's login details in `remote_monitors`
+Used to instruct the app to execute a restart of the monitor script on all nodes. If a node has its login detail in `remote_monitors` it will attempt to reboot the hardware itself. To reboot a particular node in a location, specify the `location` parameter. This same location, should be used in defining the node's login details in `remote_monitors`
 
 ```python
 # restart the monitor scripts in all nodes
@@ -191,14 +196,14 @@ self.call_service("monitor/restart_device", location="living_room", namespace=mq
 Used to instruct the app to have the nodes report the state of their devices
 
 ```python
-self.call_service("presensce/reload_device_state", namespace=mqtt)
+self.call_service("presence/reload_device_state", namespace=mqtt)
 ```
 
 ### load_known_devices
 Used to instruct the app to have the nodes setup the known devices as specified in the app's configuration
 
 ```python
-self.call_service("presensce/load_known_devices", namespace=mqtt)
+self.call_service("presence/load_known_devices", namespace=mqtt)
 ```
 
 ### clear_location_entities
@@ -229,6 +234,6 @@ Within this app, RSSI tracking is also updated regularly on the AppDaemon based 
 Hardware Rebooting (WARNING):
 -----------------------------
 
-This is a feature which allows the app to remotely reboot a system, the script is running in. It must be noted to make use of this, an external python package in the `requirements.txt` file most be installed. If using `Hass.io`, do add it to your `python_pakages` list in the config. If running on a standalone Linux system and not using the supplied script above, simply run `pip3 install -r requirements.txt` should install it; depending on which user is running AD. Care should be taken when using this feature, as any device with its details specified within the `remote_monitors` can be rebooted by the app. The hardware within which this app is running, should never be added to the list. Below is listed the conditions that can lead to a hardware reboot: 
+This is a feature which allows the app to remotely reboot a node's hardware, and not just the script it is running. It must be noted to make use of this, an external python package in the `requirements.txt` file most be installed. If using `Hass.io`, do add it to your `python_pakages` list in the config. If running on a standalone Linux system and not using the supplied script above, simply run `pip3 install -r requirements.txt` should install it; depending on which user is running AD. Care should be taken when using this feature, as any device with its details specified within the `remote_monitors` can be rebooted by the app. The hardware within which this app is running, should never be added to the list. Below is listed the conditions that can lead to a hardware reboot: 
 - When a `restart_device` service call is made, the app will also attempt to reboot the hardware
 - When a MQTT message is sent, to the reboot topic

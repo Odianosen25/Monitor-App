@@ -177,4 +177,11 @@ To maximise the app, it will be advisable to setup the system in the home as fol
 RSSI Tracking:
 --------------
 
-Within this app, RSSI tracking is also updated regurlarly on the AppDaemon based entities. I personally use this, for rudimentary home area tracking, aided with the use of motion sensors within the home. As at the time of last update, the `monitor.sh` script has not way of requesting the RSSI values alone of scanned/available devices. To retrieve this data, the system carries out arrival scans when motion is detected after a set interval. To use this feature, it is advised that all monitor systems are setup as `monitor.sh -tad -a -b` and the `PREF_MQTT_REPORT_SCAN_MESSAGES` should be set to `true` in preferences. I also found using this `arrival` scans only based on motion sensors, does help in keeping my systems reported state updated, with as minimal scans as possible; for example no need scanning at night, when all are sleeping. I am not advising the get motion sensors for this, but in my home I already had motion sensors for lights. So felt I may as well integrate it to imporve on reliability. 
+Within this app, RSSI tracking is also updated regurlarly on the AppDaemon based entities. I personally use this, for rudimentary home area tracking, aided with the use of motion sensors within the home. To use this feature, it is advised that all monitor systems are setup as `monitor.sh -tad -a -b` and the `PREF_MQTT_REPORT_SCAN_MESSAGES` should be set to `true` in preferences. I also found using this `rssi` scans only based on motion sensors, does help in keeping my systems reported state updated, with as minimal scans as possible; for example no need scanning at night, when all are sleeping. I am not advising the get motion sensors for this, but in my home I already had motion sensors for lights. So felt I may as well integrate it to imporve on reliability.
+
+Hardware Rebooting (WARNING):
+-----------------------------
+
+This is a feature which allows the app to remotely reboot a system, the script is running in. Care should be taken when using this feature, as any device with its details specified within the `remote_monitors` can be rebooted by the app. The hardware within which this app is running, should never be added to the list. Below is listed the conditions that can lead to a hardware reboot: 
+- When a `restart_device` service call is made, the app will also attempt to reboo the hardware
+- When a MQTT message is sent, to the reboot topic

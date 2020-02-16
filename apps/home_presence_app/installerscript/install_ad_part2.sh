@@ -68,7 +68,7 @@ echo -e "\e[32m[STEP 7/10] Createing folders | Done\e[0m"
 
 # Copy remainig files to correct folders
 echo -e "\e[96m[STEP 8/10] Copy configuration files and Monitor-App to AppDaemon...\e[90m"
-if cp /home/pi/Monitor-App/apps/home_precence_app/install/appdaemon.yaml /home/appdaemon/.appdaemon/conf/appdaemon.conf;
+if cp /home/pi/Monitor-App/apps/home_precence_app/installerscript/appdaemon.yaml /home/appdaemon/.appdaemon/conf/appdaemon.conf;
 then
     echo -e "\e[32m Copy configuration files | Done\e[0m"
 else
@@ -76,7 +76,7 @@ else
     exit;
 fi
 
-if cp /home/pi/Monitor-App/apps/home_precence_app/install/apps.yaml /home/appdaemon/.appdaemon/conf/apps/apps.yaml;
+if cp /home/pi/Monitor-App/apps/home_precence_app/installerscript/apps.yaml /home/appdaemon/.appdaemon/conf/apps/apps.yaml;
 then
     echo -e "\e[32m Copy Monitor-App to AppDaemon | Done\e[0m"
 else

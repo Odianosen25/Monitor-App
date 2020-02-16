@@ -84,8 +84,18 @@ class HomePresenceApp(ad.ADBase):
         self.motion_timer = None
 
         # Setup home gateway sensors
-        for gateway_sensor in self.args.get("home_gateway_sensors", []):
-            self.hass.listen_state(self.gateway_opened, gateway_sensor)
+        if self.args.get("home_gateway_sensors") is not None:
+
+            for gateway_sensor in self.args["home_gateway_sensors"]:
+                self.hass.listen_state(self.gateway_opened, gateway_sensor)
+        else:
+            # no gateway sensors, do app has to run arrive and depart scans every 2 minutes
+            self.adbase.log(
+                "No Gateway Sensors specified, Monitor-APP will run Arrive and Depart Scan every 2 minutes. Please specify Gateway Sensors for a better experience",
+                Level="WARNING",
+            )
+            self.adbase.run_every(self.run_arrive_scan, "now", 60)
+            self.adbase.run_every(self.run_depart_scan, "now+1", 60)
 
         # Setup home motion sensors, used for RSSI tracking
         for motion_sensor in self.args.get("home_motion_sensors", []):
@@ -830,6 +840,7 @@ class HomePresenceApp(ad.ADBase):
         self.adbase.log(
             "Processing System Unavailable for " + location.replace("_", " ").title()
         )
+
         for _, entity_list in self.home_state_entities.items():
             for sensor in entity_list:
                 if location in sensor:  # that sensor belongs to that location
@@ -955,5 +966,8 @@ class HomePresenceApp(ad.ADBase):
                 level="WARNING",
             )
             return
+
+        if location in kwargs:
+            kwargs["location"] = kwargs["location"].replace(" ", "_").lower()
 
         self.adbase.run_in(func, 0, **kwargs)

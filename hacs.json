@@ -1,5 +1,5 @@
 {
     "name": "Monitor-App",
     "render_readme": "true",
-    "domains": ["binary_sensor", "sensor"]
+    "domains": ["binary_sensor", "sensor", "device_tracker"]
 }

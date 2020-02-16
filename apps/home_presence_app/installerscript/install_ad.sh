@@ -67,7 +67,7 @@ sudo cp ~/tmp/home_presence_app.py ~/Monitor-App/apps/home_precence_app/home_pre
 sudo cp ~/tmp/appdaemon@appdaemon.service ~/Monitor-App/apps/home_precence_app/installerscript/appdaemon@appdaemon.service
 sudo cp ~/tmp/appdaemon.yaml ~/Monitor-App/apps/home_precence_app/installerscript/appdaemon.yaml
 sudo cp ~/tmp/apps.yaml ~/Monitor-App/apps/home_precence_app/installerscript/apps.yaml
-sudo cp ~/tmp/install_ad_part2.sh ~/Monitor-App/apps/home_precence_app/installscript/install_ad_part2.sh
+sudo cp ~/tmp/install_ad_part2.sh ~/Monitor-App/apps/home_precence_app/installerscript/install_ad_part2.sh
 ######################  END REMOVED  #######################
 
 #Create User appdaemon

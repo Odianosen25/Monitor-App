@@ -34,6 +34,29 @@ When developing this app, 4 main things were my target:
 - Speed: To improve in speed, the app makes use of an internal feature, whereby the app instructs the system to carry out an arrival or departure scans based on if someone enters or leaves the house and if everyone home or not. This made possible without need of forcing the monitor system to scan more frequently and thereby reducing impact on WiFi and other wireless equipment :relieved:
 - Lastly and most especially Reliability: It was important false positives/negatives are eliminated in the way the system runs. So the app tries to build in some little time based buffers here and there :grimacing:
 
+To use the app, it is required to setup the system in the home as follows:
+--------------------------------------------------------------------------
+
+- Use Appdaemon >= 4.0 (of course :roll_eyes:)
+- Make use of the Appdaemon MQTT plugin. How to setup the MQTT plugin in AD can be seen via this [link](https://appdaemon.readthedocs.io/en/latest/CONFIGURE.html#configuration-of-the-mqtt-plugin). A simple plugin configuration sufficient for this app, in the `appdaemon.yaml` file is seen below.
+    ```yaml
+    plugins:
+        HASS:
+          type: hass
+          ha_url: <some_url>
+          token: <token>
+          
+        MQTT:
+           type: mqtt
+           namespace: mqtt
+           client_host: Broker IP Address or DNS
+           client_user: username
+           client_password: password
+    ```
+- Have a single main sensor, which runs as `monitor.sh -tdr -a -b` in a location that users stay more often in line with @andrewjfreyer example setup. If having more than 1 monitor, have the rest run as `monitor.sh -tad -a -b` so they only scan on trigger for both arrival and departure.
+- In the main sensor, have good spacing between scans, not only to avoid unnecessarily flooding your environment with scans but also allowing the app to take over scans intermittently. I have mine set at 120 secs throughout for now
+- Have sensors at the entrances into the home which I termed `gateways`, whether it be doors or garages. Windows also for those that use it :wink:
+
 ### Example Simple Configuration
 ```yaml
 home_presence_app:
@@ -197,15 +220,6 @@ This topic is listened to by the app, and when a message is received it will exe
  
 ### monitor/location/reboot
  This topic is used by the app to reboot a remote monitor node. The `location` parmeter can be a any of the declared nodes in `remote_monitors`. So if wanting to say reboot only the living room's node, simply send an empty payload to `monitor/living_room/reboot`. if the location is `all`, that is an empty payload is sent to `monitor/all/reboot`, this will reboot all the declared remote_monitor nodes.
-
-To maximise the app, it will be advisable to setup the system in the home as follows:
--------------------------------------------------------------------------------------
-
-- Use Appdaemon >= 4.0 (of course :roll_eyes:)
-- Make use of the Appdaemon MQTT plugin. 
-- Have a single main sensor, which runs as `monitor.sh -tdr -a -b` in a location that users stay more often in line with @andrewjfreyer example setup. If having more than 1 monitor, have the rest run as `monitor.sh -tad -a -b` so they only scan on trigger for both arrival and departure.
-- In the main sensor, have good spacing between scans, not only to avoid unnecessarily flooding your environment with scans but also allowing the app to take over scans intermittently. I have mine set at 120 secs throughout for now
-- Have sensors at the entrances into the home which I termed `gateways`, whether it be doors or garages. Windows also for those that use it :wink:
 
 RSSI Tracking:
 --------------

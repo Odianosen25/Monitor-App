@@ -859,11 +859,6 @@ class HomePresenceApp(ad.ADBase):
         entity_id = f"{self.presence_name}.{location}"
         self.mqtt.set_state(entity_id, state="offline")
 
-        if location in self.args.get("remote_monitors", {}):
-            # if device is in remote monitors, then it can be restarted
-            # so reboot the device
-            self.adbase.run_in(self.restart_device, 0, location=location)
-
     def system_state_changed(self, entity, attribute, old, new, kwargs):
         """Respond to a change in the system state."""
         self.adbase.run_in(self.reload_device_state, 0)

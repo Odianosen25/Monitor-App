@@ -63,7 +63,7 @@ echo -e "\e[0m"
 sudo mkdir Monitor-App/apps
 sudo mkdir Monitor-App/apps/home_precence_app
 sudo mkdir Monitor-App/apps/home_precence_app/installerscript
-sudo cp ~/tmp/home_presence_app.py ~/Monitor-App/apps/home_precence_app/home_presence_app.py
+sudo cp ~/tmp/home_precence_app.py ~/Monitor-App/apps/home_precence_app/home_precence_app.py
 sudo cp ~/tmp/appdaemon@appdaemon.service ~/Monitor-App/apps/home_precence_app/installerscript/appdaemon@appdaemon.service
 sudo cp ~/tmp/appdaemon.yaml ~/Monitor-App/apps/home_precence_app/installerscript/appdaemon.yaml
 sudo cp ~/tmp/apps.yaml ~/Monitor-App/apps/home_precence_app/installerscript/apps.yaml

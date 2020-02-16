@@ -1,9 +1,10 @@
 """AppDaemon App For use with Monitor Bluetooth Presence Detection Script.
 
 apps.yaml parameters:
-| - monitor_topic (default 'presence'): MQTT Topic monitor.sh script publishes to
+| - monitor_topic (default 'monitor'): MQTT Topic monitor.sh script publishes to
+| - mqtt_event (default 'MQTT_MESSAGE'): MQTT event name as specified in the plugin setting 
 | - not_home_timeout (default 30s): Time interval before declaring not home
-| - minimum_confidence (default 90): Minimum Confidence Level to consider home
+| - minimum_confidence (default 50): Minimum Confidence Level to consider home
 | - depart_check_time (default 30s): Time to wait before running depart scan
 | - system_timeout (default 90s): Time for system to report back from echo
 | - system_check (default 30s): Time interval for checking if system is online
@@ -13,6 +14,7 @@ apps.yaml parameters:
 | - user_device_domain: Use "binary_sensor" or "device_tracker" domains.
 | - known_devices: Known devices to be added to each monitor.
 | - known_beacons: Known Beacons to monitor.
+| - remote_monitors: login details of remote monitors that can be hardware rebooted
 """
 import json
 import datetime
@@ -49,7 +51,7 @@ class HomePresenceApp(ad.ADBase):
         self.presence_name = self.presence_topic.split("/")[-1]
 
         self.timeout = self.args.get("not_home_timeout", 30)
-        self.minimum_conf = self.args.get("minimum_confidence", 90)
+        self.minimum_conf = self.args.get("minimum_confidence", 50)
         self.depart_check_time = self.args.get("depart_check_time", 30)
         self.system_timeout = self.args.get("system_timeout", 60)
         system_check = self.args.get("system_check", 30)
@@ -82,8 +84,18 @@ class HomePresenceApp(ad.ADBase):
         self.motion_timer = None
 
         # Setup home gateway sensors
-        for gateway_sensor in self.args.get("home_gateway_sensors", []):
-            self.hass.listen_state(self.gateway_opened, gateway_sensor)
+        if self.args.get("home_gateway_sensors") is not None:
+
+            for gateway_sensor in self.args["home_gateway_sensors"]:
+                self.hass.listen_state(self.gateway_opened, gateway_sensor)
+        else:
+            # no gateway sensors, do app has to run arrive and depart scans every 2 minutes
+            self.adbase.log(
+                "No Gateway Sensors specified, Monitor-APP will run Arrive and Depart Scan every 2 minutes. Please specify Gateway Sensors for a better experience",
+                Level="WARNING",
+            )
+            self.adbase.run_every(self.run_arrive_scan, "now", 60)
+            self.adbase.run_every(self.run_depart_scan, "now+1", 60)
 
         # Setup home motion sensors, used for RSSI tracking
         for motion_sensor in self.args.get("home_motion_sensors", []):
@@ -828,6 +840,7 @@ class HomePresenceApp(ad.ADBase):
         self.adbase.log(
             "Processing System Unavailable for " + location.replace("_", " ").title()
         )
+
         for _, entity_list in self.home_state_entities.items():
             for sensor in entity_list:
                 if location in sensor:  # that sensor belongs to that location
@@ -953,5 +966,8 @@ class HomePresenceApp(ad.ADBase):
                 level="WARNING",
             )
             return
+
+        if location in kwargs:
+            kwargs["location"] = kwargs["location"].replace(" ", "_").lower()
 
         self.adbase.run_in(func, 0, **kwargs)

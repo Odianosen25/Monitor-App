@@ -107,27 +107,10 @@ clear
 # Final instructions to make the final configurations of
 # the files appdaemon.yaml and apps.yaml, templates are already in place
 echo -e "\e[0m"
-echo -e "\e[96mThe final step now are to fill in information about your own\e[90m"
-echo -e "\e[96menvironment, like IP address, username and password ++ for your\e[90m"
-echo -e "\e[96mMQTT broker in appdaemon.conf...\e[90m"
-echo -e "\e[96mYou will find the file here, and run:\e[90m"
-echo -e "\e[32msudo nano /home/appdaemon/.appdaemon/conf/appdaemon.conf\e[0m"
-echo -e "\e[96mFinish the edit with ctrl+o & ctrl+x\e[90m"
 echo -e "\e[0m"
-echo -e "\e[96mThen you need to edit and complete missing information in\e[90m"
-echo -e "\e[96mapps.yaml that you will find here, and run:\e[90m"
-echo -e "\e[32msudo nano /home/appdaemon/.appdaemon/conf/apps.yaml\e[0m"
-echo -e "\e[96mFinish the edit with ctrl+o & ctrl+x\e[90m"
+echo -e "\e[96mNow, type \e[32mexit\e[96m to quit AD environment!\e[90m"
 echo -e "\e[0m"
-echo -e "\e[96mWhen all that is done, reboot your device.\e[90m"
-echo -e "\e[96mIf all went well, you should see new entities in HA\e[90m"
 echo -e "\e[0m"
-echo -e "\e[96mNow, type \e[32mexit\e[0m and to finalize the installation, you have\e[90m"
-echo -e "\e[96m a final command to perform:\e[90m"
-echo -e "\e[96mType \e[32msudo systemctl enable appdaemon@appdaemon.service --now\e[0m\e[90m"
-echo -e "\e[96mto enable AppDaemon 4.x system service for autostart\e[90m"
-echo -e "\e[0m"
-echo -e "\e[96mThen what is left is to do \e[32msudo reboot now\e[0m to get going\e[90m"
 exit
 
 

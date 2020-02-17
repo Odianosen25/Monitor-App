@@ -471,7 +471,7 @@ class HomePresenceApp(ad.ADBase):
 
     def handle_nodes_state(self, location, state):
         """Used to handle the state of the nodes for reporting """
-        location_friendly = location.replace(" ", "_").title()
+        location_friendly = location.replace("_", " ").title()
         state = state.lower()
 
         attributes = self.mqtt.get_state(self.monitor_entity, attribute="all")[

@@ -12,6 +12,6 @@ These files are for first time install of AppDaemon 4.x, tested on Raspberry Pi 
 
 To execute the script, run following command from your commandline:
 
-`bash -c "$(curl -sL https://raw.githubusercontent.com/Odianosen25/Monitor-App/master/apps/home_presence_app/installerscript/install_ad.sh)"`
+`bash -c "$(curl -sL https://raw.githubusercontent.com/Odianosen25/Monitor-App/master/installerscript/install_ad.sh)"`
 
 If you get an error message about Curl, install curl by do `sudo apt-get install curl -y`

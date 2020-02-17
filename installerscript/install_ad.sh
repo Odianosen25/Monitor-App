@@ -1,7 +1,7 @@
 
 # Bash script to install AppDaemon 4.x to a Raspberry Pi 3/4
 # Recommended OS: Latest Raspbian downloaded from raspberrypi.org
-# Run: bash -c "$(curl -sL https://raw.githubusercontent.com/Odianosen25/Monitor-App/master/apps/home_presence_app/installerscript/install_ad.sh)"
+# Run: bash -c "$(curl -sL https://raw.githubusercontent.com/Odianosen25/Monitor-App/master/installerscript/install_ad.sh)"
 
 clear
 echo -e "\e[0m"
@@ -59,17 +59,6 @@ else
 fi
 echo -e "\e[0m"
 
-###################### TO BE REMOVED #######################
-#sudo mkdir Monitor-App/apps
-#sudo mkdir Monitor-App/apps/home_presence_app
-sudo mkdir Monitor-App/apps/home_presence_app/installerscript
-#sudo cp ~/tmp/home_presence_app.py ~/Monitor-App/apps/home_presence_app/home_presence_app.py
-sudo cp ~/tmp/appdaemon@appdaemon.service ~/Monitor-App/apps/home_presence_app/installerscript/appdaemon@appdaemon.service
-sudo cp ~/tmp/appdaemon.yaml ~/Monitor-App/apps/home_presence_app/installerscript/appdaemon.yaml
-sudo cp ~/tmp/apps.yaml ~/Monitor-App/apps/home_presence_app/installerscript/apps.yaml
-sudo cp ~/tmp/install_ad_part2.sh ~/Monitor-App/apps/home_presence_app/installerscript/install_ad_part2.sh
-######################  END REMOVED  #######################
-
 #Create User appdaemon
 echo -e "\e[96m[STEP 3/10] Creating users...\e[90m"
 if sudo useradd -rm appdaemon;
@@ -102,7 +91,7 @@ fi
 
 # Copy service to run AppDaemon as Service
 echo -e "\e[96m[STEP 4/10] Copying service to run AppDaemon as Service...\e[90m"
-if sudo cp ~/Monitor-App/apps/home_presence_app/installerscript/appdaemon@appdaemon.service /etc/systemd/system/appdaemon@appdaemon.service;
+if sudo cp ~/Monitor-App/installerscript/appdaemon@appdaemon.service /etc/systemd/system/appdaemon@appdaemon.service;
 then
     echo -e "\e[32m[STEP 4/10] Copy service | Done\e[0m"
 else
@@ -122,7 +111,7 @@ fi
 #fi
 
 # Prepare installation part 2 file
-if sudo cp ~/Monitor-App/apps/home_presence_app/installerscript/install_ad_part2.sh ~/install_ad_part2.sh;
+if sudo cp ~/Monitor-App/installerscript/install_ad_part2.sh ~/install_ad_part2.sh;
 then
     echo -e "\e[32mPreparation of installation part 2 | Done\e[0m"
 else

@@ -127,12 +127,40 @@ else
     exit;
 fi
 
+echo " "
+echo " "
+echo " "
+echo -e "\e[32mTo continue installation, type: \e[96mbash install_ad_part2.sh\e[0m"
+echo " "
+echo " "
+echo " "
 
-echo " "
-echo " "
-echo -e "\e[32mType: \e[96msudo -u appdaemon -H -s\e[0m"
-echo " "
-echo -e "\e[32mThen to continue installation, type: \e[96mbash install_ad_part2.sh\e[0m"
-echo " "
-echo " "
-echo " "
+sudo -u appdaemon -H -s
+
+if sudo systemctl enable appdaemon@appdaemon.service --now;
+then
+    echo -e "\e[32mAutostart Service | Done\e[0m"
+else
+    echo -e "\e[31mAutostart Service | Failed\e[0m"
+    exit;
+fi
+
+echo -e "\e[0m"
+echo -e "\e[0m"
+echo -e "\e[0m"
+echo -e "\e[0m"
+echo -e "\e[96mThe final step now are to fill in information about your own\e[90m"
+echo -e "\e[96menvironment, like IP address, username and password ++ for your\e[90m"
+echo -e "\e[96mMQTT broker in appdaemon.conf...\e[90m"
+echo -e "\e[96mYou will find the file here:\e[90m"
+echo -e "\e[32msudo nano /home/appdaemon/.appdaemon/conf/appdaemon.conf\e[0m"
+echo -e "\e[96mFinish the edit with ctrl+o & ctrl+x\e[90m"
+echo -e "\e[0m"
+echo -e "\e[96mThen you need to edit and complete missing information in\e[90m"
+echo -e "\e[96mapps.yaml that you will find here:\e[90m"
+echo -e "\e[32msudo nano /home/appdaemon/.appdaemon/conf/apps.yaml\e[0m"
+echo -e "\e[96mFinish the edit with ctrl+o & ctrl+x\e[90m"
+echo -e "\e[0m"
+echo -e "\e[96mWhen all above is done, \e[32msudo reboot now\e[96m your device.\e[90m"
+echo -e "\e[96mIf all went well, you should see new entities in HA\e[90m"
+echo -e "\e[0m"

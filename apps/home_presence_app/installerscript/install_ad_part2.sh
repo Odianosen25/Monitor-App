@@ -68,7 +68,7 @@ echo -e "\e[32m[STEP 7/10] Createing folders | Done\e[0m"
 
 # Copy remainig files to correct folders
 echo -e "\e[96m[STEP 8/10] Copy configuration files and Monitor-App to AppDaemon...\e[90m"
-if cp /home/pi/Monitor-App/apps/home_precence_app/installerscript/appdaemon.yaml /home/appdaemon/.appdaemon/conf/appdaemon.conf;
+if cp /home/pi/Monitor-App/apps/home_presence_app/installerscript/appdaemon.yaml /home/appdaemon/.appdaemon/conf/appdaemon.conf;
 then
     echo -e "\e[32m Copy configuration files | Done\e[0m"
 else
@@ -76,7 +76,7 @@ else
     exit;
 fi
 
-if cp /home/pi/Monitor-App/apps/home_precence_app/installerscript/apps.yaml /home/appdaemon/.appdaemon/conf/apps/apps.yaml;
+if cp /home/pi/Monitor-App/apps/home_presence_app/installerscript/apps.yaml /home/appdaemon/.appdaemon/conf/apps/apps.yaml;
 then
     echo -e "\e[32m Copy Monitor-App to AppDaemon | Done\e[0m"
 else
@@ -84,7 +84,7 @@ else
     exit;
 fi
 
-if cp /home/pi/Monitor-App/apps/home_precence_app/home_precence_app.py /home/appdaemon/.appdaemon/conf/apps/home_presence_app/home_presence_app.py;
+if cp /home/pi/Monitor-App/apps/home_presence_app/home_presence_app.py /home/appdaemon/.appdaemon/conf/apps/home_presence_app/home_presence_app.py;
 then
     echo -e "\e[32m[STEP 8/10] Copy final files | Done\e[0m"
 else
@@ -122,7 +122,12 @@ echo -e "\e[0m"
 echo -e "\e[96mWhen all that is done, reboot your device.\e[90m"
 echo -e "\e[96mIf all went well, you should see new entities in HA\e[90m"
 echo -e "\e[0m"
-
+echo -e "\e[96mNow, type \e[32mexit\e[0m and to finalize the installation, you have\e[90m"
+echo -e "\e[96m a final command to perform:\e[90m"
+echo -e "\e[96mType \e[32msudo systemctl enable appdaemon@appdaemon.service --now\e[0m\e[90m"
+echo -e "\e[96mto enable AppDaemon 4.x system service for autostart\e[90m"
+echo -e "\e[0m"
+echo -e "\e[96mThen what is left is to do \e[32msudo reboot now\e[0m to get going\e[90m"
 exit
 
 

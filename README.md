@@ -32,7 +32,11 @@ To use the app, it is required to setup the system in the home as follows:
 --------------------------------------------------------------------------
 
 - Have [Home Assistant](https://www.home-assistant.io/getting-started/) and [Appdaemon](https://appdaemon.readthedocs.io/en/latest/INSTALL.html) >= 4.0 running (of course :roll_eyes:)
-- If AppDaemon is not installed in the PC to run this app, execute `bash -c "$(curl -sL https://raw.githubusercontent.com/Odianosen25/Monitor-App/master/installerscript/install_ad.sh)"` in command line. The script will install AppDaemon and this App alongside. Then make the required changes, as required. Please read more about the [AD install script here](https://github.com/Odianosen25/Monitor-App/tree/master/installerscript/README.md). - contributed by [TheStigh](https://github.com/TheStigh)
+- If AppDaemon is not installed in the PC to run this app, execute in commandline
+    ```
+    bash -c "$(curl -sL https://raw.githubusercontent.com/Odianosen25/Monitor-App/master/installerscript/install_ad.sh)"
+    ``` 
+    The script will install AppDaemon and this App alongside. Then make the required changes, as required. Please read more about the [AD install script here](https://github.com/Odianosen25/Monitor-App/blob/dev/installerscript/README.md). - contributed by [TheStigh](https://github.com/TheStigh)
 - Make use of the Appdaemon MQTT plugin alongside that of HASS. How to setup the MQTT plugin in AD can be seen via this [link](https://appdaemon.readthedocs.io/en/latest/CONFIGURE.html#configuration-of-the-mqtt-plugin). A simple plugin configuration sufficient for this app, in the `appdaemon.yaml` file is seen below.
     ```yaml
     plugins:

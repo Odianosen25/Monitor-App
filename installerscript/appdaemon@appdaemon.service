@@ -1,0 +1,10 @@
+[Unit]
+Description=AppDaemon
+
+[Service]
+Type=simple
+User=%i
+ExecStart=/srv/appdaemon/bin/appdaemon -c /home/appdaemon/.appdaemon/conf/
+
+[Install]
+WantedBy=multi-user.target

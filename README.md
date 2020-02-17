@@ -3,7 +3,7 @@ Appdaemon App for [Andrew's Monitor Presence Detection System](https://github.co
 
 The Monitor Presence Detection system, is a Bash script `monitor.sh` created by [Andrew Freyer](https://github.com/andrewjfreyer), which is designed to run on multiple Linux systems like the Raspberry Pi around the home, to detect if persons are near or not. It is designed to work with 1 or more scripts installed on 1 or more computers (like raspberry) referred to as nodes, to detect presence. The node uses Bluetooth to detect Bluetooth devices (phone/watch/beacon/etc) is near and then reports the state from the device on a person (near or not) to a MQTT Broker. More details about the script, how it functions and setup can be found by following this [link](https://github.com/andrewjfreyer/monitor). This App is designed to maximise the use of the detection system, so that the user can easily have it integrated into their system with as less effort as possible, no matter the number of users or nodes in place.
 
-What this app does is simply to make it easy to integrate the system into Home Assistant (HA) and AppDaemon (AD). This app can be added to an Appdaemon instance, which will help to auto generate entities for presence detection based on the data reported by each node. With this app, all the user has to do, is to add the app to his AD instance, set it up and all entities and devices will be generated in HA, no matter the number of nodes running in that location or Bluetooth devices to be detected.
+What this app does is simply to make it easy to integrate the system into Home Assistant (HA) and AppDaemon (AD). This app can be added to an Appdaemon instance, which will help to auto generate entities for presence detection based on the data reported by each node. With this app, all the user has to do, is to add the app to his AD instance, set it up and all entities and devices will be generated in HA, no matter the number of nodes running in that location or Bluetooth devices to be detected. Added to this, for those that have no Appdaemon running to use this app, this repository also includes a script to easily install both AppDaemona and the Monitor-App in a Linux computer. - contributed by [TheStigh](https://github.com/TheStigh)
 
 ## Features
 - Generates sensors in Home Assistant (HA) and AppDaemon (AD) for the following
@@ -19,9 +19,11 @@ What this app does is simply to make it easy to integrate the system into Home A
 - Ability to define the `known_devices` in a single place within AD, which is then loaded to all monitor nodes on the network. This can be useful, if having multiple nodes, and need to manage all `known_devices` from a single place, instead of having to change it in all nodes individually.
 - Generates entities within AD, which has all the data published by the node per device, and can be listened to in other Apps for other automation reasons. For example `rssi` readings based on devices.
 - Constantly checks for all installed monitor nodes on the network, to ensure which is online. If any location doesn't respond after a set time `system_timeout`, it sets all entities generated from that location to `0`. This is very useful if for example, a node reported a device confidence of `100`, then it went down. The device will stay at `100` even if the user had left the house, which will lead to wrong state.
+- Reporting of the state of the entire monitor system, including all nodes state to a MQTT topic. The topic is `monitor/state` 
 - Requests all devices update from the nodes on the network on a system restart
 - Determines the closest monitor node in an area with more than one, and adds that to the generated user binary sensor. - contributed by [shbatm](https://github.com/shbatm)
 - Supports the use of external MQTT command to instruct the app to executes some tasks like `arrive` scan or hardware reboot. - contributed by [shbatm](https://github.com/shbatm)
+- Supports the use of multi-level topics for the monitor topic like `hass/monitor` instead of just `monitor`. - contributed by [shbatm](https://github.com/shbatm)
 - Has the ability to hardware reboot remote monitor nodes, as its known that after a while the Pi script is running (node) on can get locked and the script doesn't work as efficiently anymore. So instead of simply restarting the script, the app can be set to reboot the hardware itself. This can also be done via mqtt by sending an empty payload to `monitor/<location>/reboot`. More explanation below
 - Has service calls within AD only, that allows a user to execute its functions from other AD apps
 - Use motion sensors to update Received Signal Strength Indication (RSSI) values in the home, so when users move the `nearest_monitor` can be updated
@@ -30,6 +32,11 @@ To use the app, it is required to setup the system in the home as follows:
 --------------------------------------------------------------------------
 
 - Have [Home Assistant](https://www.home-assistant.io/getting-started/) and [Appdaemon](https://appdaemon.readthedocs.io/en/latest/INSTALL.html) >= 4.0 running (of course :roll_eyes:)
+- If AppDaemon is not installed in the PC to run this app, execute in commandline
+    ```
+    bash -c "$(curl -sL https://raw.githubusercontent.com/Odianosen25/Monitor-App/master/installerscript/install_ad.sh)"
+    ``` 
+    The script will install AppDaemon and this App alongside. Then make the required changes, as required. Please read more about the [AD install script here](https://github.com/Odianosen25/Monitor-App/blob/dev/installerscript/README.md). - contributed by [TheStigh](https://github.com/TheStigh)
 - Make use of the Appdaemon MQTT plugin alongside that of HASS. How to setup the MQTT plugin in AD can be seen via this [link](https://appdaemon.readthedocs.io/en/latest/CONFIGURE.html#configuration-of-the-mqtt-plugin). A simple plugin configuration sufficient for this app, in the `appdaemon.yaml` file is seen below.
     ```yaml
     plugins:

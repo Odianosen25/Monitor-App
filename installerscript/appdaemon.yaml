@@ -28,9 +28,6 @@ appdaemon:
       client_host: <ip address to your MQTT broker>
       client_user: <username to your MQTT broker>
       client_password: <password to your MQTT broker>
-      client_topics:
-        - <your topic from monitor here>/#
-        ### To work, it must be the same as 'mqtt_topicpath' in 'mqtt_preferences' of monitor 
 
 http:
     url: http://<ip address of this device>:5050

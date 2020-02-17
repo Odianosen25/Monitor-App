@@ -2,7 +2,7 @@
 # Bash script to install AppDaemon 4.x to a Raspberry Pi 3/4
 # Recommended OS: Latest Raspbian downloaded from raspberrypi.org
 # Run: bash -c "$(curl -sL https://raw.githubusercontent.com/Odianosen25/Monitor-App/master/installerscript/install_ad.sh)"
-
+cd ~
 clear
 echo -e "\e[0m"
 echo -e "\e[96m______  ___            __________                    _______                 \e[90m"
@@ -110,6 +110,17 @@ fi
 #    exit;
 #fi
 
+# Prepare installerscript files for part 2
+if sudo cp -r ~/Monitor-App/installerscript /home/appdaemon/;
+then
+    echo -e "\e[32mPreparation of scriptfiles for part 2 | Done\e[0m"
+else
+    echo -e "\e[31mPreparation of scriptfiles for part 2 | Failed\e[0m"
+    exit;
+fi
+
+sudo ~/Monitor-App/apps/home_presence_app/home_presence_app.py /home/appdaemon/installerscript/home_presence_app.py
+
 # Prepare installation part 2 file
 if sudo cp ~/Monitor-App/installerscript/install_ad_part2.sh ~/install_ad_part2.sh;
 then
@@ -144,6 +155,8 @@ else
     echo -e "\e[31mAutostart Service | Failed\e[0m"
     exit;
 fi
+
+sudo rm -r /home/appdaemon/installerscript
 
 echo -e "\e[0m"
 echo -e "\e[0m"

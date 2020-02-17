@@ -119,7 +119,7 @@ else
     exit;
 fi
 
-sudo ~/Monitor-App/apps/home_presence_app/home_presence_app.py /home/appdaemon/installerscript/home_presence_app.py
+sudo cp ~/Monitor-App/apps/home_presence_app/home_presence_app.py /home/appdaemon/installerscript/home_presence_app.py
 
 # Prepare installation part 2 file
 if sudo cp ~/Monitor-App/installerscript/install_ad_part2.sh ~/install_ad_part2.sh;

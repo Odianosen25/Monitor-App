@@ -121,7 +121,7 @@ class HomePresenceApp(ad.ADBase):
             self.hass.listen_state(self.motion_detected, motion_sensor)
 
         if self.args.get("scheduled_restart") is not None:
-            kwargs = {}
+            kwargs = {"location" : "all"}
             if "time" in self.args["scheduled_restart"]:
                 time = self.args["scheduled_restart"]["time"]
 

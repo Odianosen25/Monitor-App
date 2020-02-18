@@ -6,3 +6,9 @@ home_presence_app:
     - MQTT
   home_gateway_sensors:
     - binary_sensor.main_door
+  
+  scheduled_restart: 
+    time: "00:00:01"
+    days:
+      - wed
+      - sat

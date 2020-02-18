@@ -27,6 +27,7 @@ What this app does is simply to make it easy to integrate the system into Home A
 - Has the ability to hardware reboot remote monitor nodes, as its known that after a while the Pi script is running (node) on can get locked and the script doesn't work as efficiently anymore. So instead of simply restarting the script, the app can be set to reboot the hardware itself. This can also be done via mqtt by sending an empty payload to `monitor/<location>/reboot`. More explanation below
 - Has service calls within AD only, that allows a user to execute its functions from other AD apps
 - Use motion sensors to update Received Signal Strength Indication (RSSI) values in the home, so when users move the `nearest_monitor` can be updated
+- Can schedule a restart of the entire Monitor system at a scheduled time during certain days in the week via the `scheduled_restart` configuration
     
 To use the app, it is required to setup the system in the home as follows:
 --------------------------------------------------------------------------
@@ -99,6 +100,13 @@ home_presence_app:
   system_timeout: 60
   home_gateway_sensors:
     - binary_sensor.main_door_contact
+  
+  # reboot the system at 12 midnight on Mondays and Thursday
+  scheduled_restart:
+    time: 00:00:01
+    days:
+      - mon
+      - thu
     
   home_motion_sensors:
     - binary_sensor.living_room_motion_sensor_occupancy
@@ -142,7 +150,9 @@ key | optional | type | default | description
 `minimum_confidence` | True | int | 50 | Minimum confidence required across all nodes, for a device to be considered departed.
 `not_home_timeout` | True | int | 15 | Time in seconds a device has to be considered away, before registering it deaprted by the app.
 `system_check`| True | int | 30 | Time in seconds, for the app to check the availability of each monitor node.
-`system_timeout`| True | int | 60 | Time in seconds, for a monitor node not to respond to system check for it to be considered offline. If this happens, and the node's login details is specified under `remote_monitors`, the node will be rebooted
+`system_timeout`| True | int | 60 | Time in seconds, for a monitor node not to respond to system check for it to be considered offline. If this happens, and the node's login details is specified under
+`scheduled_restart`| True | dict | | A dictionary specifing the `time` as `str` in `HH:MM:SS` format, and first 3 letters of the `days` as a `list` the app should restart all nodes on the network. If `remote_monitors` specified, it will lead to a reboot of the node's hardware also
+`remote_monitors`, the node will be rebooted
 `home_gateway_sensors`| True | list |  | List of gateway sensors, which can be used by the app to instruct the nodes based on their state if to run a arrive/depart scan. If all home, only depart scan is ran. If all away, arrive scan is ran, and if neither both scans are ran.
 `home_motion_sensors`| True | list |  | List of motion sensors, which can be used by the app to instruct the nodes based on their state if to run rssi scan.
 `known_devices`| True | list |  | List of known devices that are to be loaded into all the nodes on the network

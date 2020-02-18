@@ -22,7 +22,7 @@ import adbase as ad
 import copy
 
 
-__VERSION__ = 2.0
+__VERSION__ = "2.1.0"
 
 # pylint: disable=attribute-defined-outside-init,unused-argument
 class HomePresenceApp(ad.ADBase):
@@ -120,10 +120,18 @@ class HomePresenceApp(ad.ADBase):
         for motion_sensor in self.args.get("home_motion_sensors", []):
             self.hass.listen_state(self.motion_detected, motion_sensor)
 
-        # Uncomment to restart the monitor systems every night at midnight
-        # if "remote_monitors" specifed, it will lead to the hardward also being rebooted
-        # time = "00:00:01"
-        # self.adbase.run_daily(self.restart_device, time)
+        if self.args.get("scheduled_restart") is not None:
+            kwargs = {}
+            if "time" in self.args["scheduled_restart"]:
+                time = self.args["scheduled_restart"]["time"]
+
+                if "days" in self.args["scheduled_restart"]:
+                    kwargs["constrain_days"] = ",".join(self.args["scheduled_restart"]["days"])
+
+                self.adbase.run_daily(self.restart_device, time, **kwargs)
+            
+            else:
+                self.adbase.log("Will not be setting up auto reboot, as no time specified", level="WARNING")
 
         # Setup the system checks.
         if self.system_timeout > system_check:

@@ -108,7 +108,7 @@ clear
 # the files appdaemon.yaml and apps.yaml, templates are already in place
 echo -e "\e[0m"
 echo -e "\e[0m"
-echo -e "\e[96mNow, type \e[32mexit\e[96m to quit AD environment!\e[90m"
+echo -e "\e[32mNow, type \e[96mexit\e[32m to quit AD environment!\e[0m"
 echo -e "\e[0m"
 echo -e "\e[0m"
 exit

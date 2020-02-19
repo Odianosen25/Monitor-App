@@ -292,7 +292,7 @@ class HomePresenceApp(ad.ADBase):
 
         # RSSI Value for a Known Device:
         if action == "rssi":
-            if topic == f"{self.presence_topic}/scan/rssi":
+            if topic == f"{self.presence_topic}/scan/rssi" or payload == "":
                 return
 
             attributes = {

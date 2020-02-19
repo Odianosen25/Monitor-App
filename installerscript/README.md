@@ -30,5 +30,5 @@ To execute the updatescript, run following command from your commandline:
 </details>
 <br>
 <br>
-> This folder contain templates of configuration files to get going, descriptions are inside the tempales.
+This folder contain templates of configuration files to get going, descriptions are inside the tempales.
 

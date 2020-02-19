@@ -10,12 +10,27 @@ These files are for first time install of AppDaemon 4.x, tested on Raspberry Pi 
 > The script is tested in Raspberry only (RPi3 & 4) but should work on most Linux distro's and usernames
 ***
 
-To execute the script, run following command from your commandline:
+
+<details><summary><b>Installation Fully Standalone Instructions</b></summary>
+
+<br>
+To execute the fully installscript, run following command from your commandline:
 
 `bash -c "$(curl -sL https://raw.githubusercontent.com/Odianosen25/Monitor-App/master/installerscript/install_ad.sh)"`
 
 If you get an error message about Curl, install curl by do `sudo apt-get install curl -y`
 
 ***
+</details>
+<br>
+
+<details><summary><b>Update Instructions Fully Standalone</b></summary>
+To execute the updatescript, run following command from your commandline:
+
+`bash -c "$(curl -sL https://raw.githubusercontent.com/Odianosen25/Monitor-App/master/installerscript/update_ad_ma.sh)"`
+</details>
+<br>
+***
+<br>
 This folder contain templates of configuration files to get going, descriptions are inside the tempales.
 

@@ -1,4 +1,4 @@
-# Quick installation script
+# Quick installation & update scripts
 
 ## For Standalone installation
 

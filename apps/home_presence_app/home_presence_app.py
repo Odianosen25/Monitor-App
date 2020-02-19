@@ -121,13 +121,17 @@ class HomePresenceApp(ad.ADBase):
             self.hass.listen_state(self.motion_detected, motion_sensor)
 
         if self.args.get("scheduled_restart") is not None:
-            kwargs = {"location" : "all"}
+            kwargs = {}
             if "time" in self.args["scheduled_restart"]:
                 time = self.args["scheduled_restart"]["time"]
 
                 if "days" in self.args["scheduled_restart"]:
                     kwargs["constrain_days"] = ",".join(self.args["scheduled_restart"]["days"])
+                
+                if "location" in self.args["scheduled_restart"]:
+                    kwargs["location"] = self.args["scheduled_restart"]["location"]
 
+                self.adbase.log("Setting up Monitor auto reboot")
                 self.adbase.run_daily(self.restart_device, time, **kwargs)
             
             else:
@@ -858,32 +862,45 @@ class HomePresenceApp(ad.ADBase):
             self.mqtt.mqtt_publish(topic, payload)
 
         else:
-            location = location.lower().replace(" ", "_")
             if location == "all":  # reboot everything
-                location = None
-
-            elif location not in self.args.get("remote_monitors", {}):
+                # get all locations
+                locations = list(self.args.get("remote_monitors", {}).keys())
+            
+            elif isinstance(location, str):
+                locations = location.split(",")
+            
+            elif isinstance(location, list):
+                locations = location
+            
+            else:
                 self.adbase.log(
-                    f"Location {location} not defined. So cannot restart it",
+                    f"Location {location} not supported. So cannot run hardware reboot",
                     level="WARNING",
                 )
 
                 return
 
-        if self.args.get("remote_monitors") is not None:
-            for remote_device, setting in self.args["remote_monitors"].items():
+            for location in locations:
+                location = location.lower().replace(" ", "_")
 
-                if location is not None and remote_device != location:
+                if location not in self.args["remote_monitors"]:
+                    self.adbase.log(
+                        f"Location {location} not defined. So cannot reboot it",
+                        level="WARNING",
+                    )
+
                     continue
+
+                setting = self.args["remote_monitors"][location]
 
                 try:
                     host = setting["host"]
                     username = setting["username"]
                     password = setting["password"]
-                    self.restart_hardware(remote_device, host, username, password)
+                    self.restart_hardware(location, host, username, password)
                 except Exception as e:
                     self.adbase.error(
-                        f"Could not restart {remote_device}, due to {e}", level="ERROR"
+                        f"Could not restart {location}, due to {e}", level="ERROR"
                     )
 
     def restart_hardware(self, device, host, username, password):

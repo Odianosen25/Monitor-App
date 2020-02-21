@@ -859,7 +859,7 @@ class HomePresenceApp(ad.ADBase):
         if location is None:  # no specific location specified
             self.mqtt.mqtt_publish(topic, payload)
 
-        else:
+        elif self.args.get("remote_monitors") is not None and self.args["remote_monitors"].get("disable") is not True:
             if location == "all":  # reboot everything
                 # get all locations
                 locations = list(self.args.get("remote_monitors", {}).keys())

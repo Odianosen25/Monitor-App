@@ -134,6 +134,7 @@ home_presence_app:
     - xx:xx:xx:xx:xx:xx Odianosen's Car Keys
   
   remote_monitors:
+    disable: False
     kitchen:
       host: !secret kitchen_monitor_host
       username: !secret kitchen_monitor_username
@@ -163,7 +164,7 @@ key | optional | type | default | description
 `not_home_timeout` | True | int | 15 | Time in seconds a device has to be considered away, before registering it deaprted by the app.
 `system_check`| True | int | 30 | Time in seconds, for the app to check the availability of each monitor node.
 `system_timeout`| True | int | 60 | Time in seconds, for a monitor node not to respond to system check for it to be considered offline.
-`scheduled_restart`| True | dict | | A dictionary specifing the `time` as `str` in `HH:MM:SS` format, first 3 letters of the `days` as a `list` and locations as `list` or `str` the app should restart the nodes on the network. If `remote_monitors` specified, it will lead to a reboot of the node's hardware as specified in location. If no location is specified, it will only restart the script.
+`scheduled_restart`| True | dict | | A dictionary specifing the `time` as `str` in `HH:MM:SS` format, first 3 letters of the `days` as a `list` and locations as `list` or `str` the app should restart the nodes on the network. If `remote_monitors` specified and `disabled` is not `True`, it will lead to a reboot of the node's hardware as specified in location. If no location is specified, it will only restart the script.
 `remote_monitors`| True | dict | | The names (locations) and login details of the nodes to be rebooted
 `home_gateway_sensors`| True | list |  | List of gateway sensors, which can be used by the app to instruct the nodes based on their state if to run a arrive/depart scan. If all home, only depart scan is ran. If all away, arrive scan is ran, and if neither both scans are ran.
 `home_motion_sensors`| True | list |  | List of motion sensors, which can be used by the app to instruct the nodes based on their state if to run rssi scan.

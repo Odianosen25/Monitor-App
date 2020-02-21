@@ -174,7 +174,7 @@ key | optional | type | default | description
 
 Service Calls:
 --------------
-This app supports the use of some service calls, which can be useful if wanting to use execute some commands in the app from other AD apps. An example service call is 
+This app supports the use of some service calls, which can be useful if wanting to use execute some commands in the app from other AD apps. The domain of the service calls, depends on what is specified as the `monitor_topic`. An example service call is 
 
 ```python
 self.call_service("monitor/remove_known_device", device="xx:xx:xx:xx:xx:xx", namespace=mqtt)
@@ -200,7 +200,7 @@ Used to instruct the app to execute a depart scan on all nodes. If wanting to ex
 
 ```python
 # run depart scan in 10 seconds time
-self.call_service("presence/run_arrive_scan", scan_delay=10, namespace=mqtt)
+self.call_service("presence/run_depart_scan", scan_delay=10, namespace=mqtt)
 ```
 
 ### run_rssi_scan

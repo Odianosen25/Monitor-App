@@ -17,7 +17,6 @@ apps.yaml parameters:
 | - remote_monitors: login details of remote monitors that can be hardware rebooted
 """
 import json
-import datetime
 import adbase as ad
 import copy
 
@@ -139,11 +138,10 @@ class HomePresenceApp(ad.ADBase):
 
         # Setup the system checks.
         if self.system_timeout > system_check:
-            time = datetime.datetime.now() + datetime.timedelta(seconds=1)
             topic = f"{self.presence_topic}/echo"
             self.adbase.run_every(
                 self.send_mqtt_message,
-                time,
+                "now",
                 system_check,
                 topic=topic,
                 payload="",
@@ -881,7 +879,7 @@ class HomePresenceApp(ad.ADBase):
                 return
 
             for location in locations:
-                location = location.lower().replace(" ", "_")
+                location = location.lower().strip().replace(" ", "_")
 
                 if location not in self.args["remote_monitors"]:
                     self.adbase.log(

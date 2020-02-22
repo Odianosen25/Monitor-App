@@ -21,7 +21,7 @@ import adbase as ad
 import copy
 
 
-__VERSION__ = "2.2.0"
+__VERSION__ = "2.2.1"
 
 # pylint: disable=attribute-defined-outside-init,unused-argument
 class HomePresenceApp(ad.ADBase):
@@ -423,7 +423,11 @@ class HomePresenceApp(ad.ADBase):
         entity_id = f"{self.presence_name}.{location}_state"
         attributes = {}
 
-        if not self.mqtt.entity_exists(entity_id):
+        if (
+            not self.mqtt.entity_exists(entity_id)
+            or self.mqtt.get_state(entity_id, attribute="friendly_name", copy=False)
+            is None
+        ):
             attributes.update(
                 {
                     "friendly_name": f"{location_friendly} State",
@@ -929,9 +933,7 @@ class HomePresenceApp(ad.ADBase):
                     host = setting["host"]
                     username = setting["username"]
                     password = setting["password"]
-                    reboot_command = setting.get(
-                        "reboot_command", "sudo reboot now"
-                    )
+                    reboot_command = setting.get("reboot_command", "sudo reboot now")
                     self.restart_hardware(
                         location, host, username, password, reboot_command
                     )

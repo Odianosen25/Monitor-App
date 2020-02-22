@@ -22,7 +22,7 @@ import copy
 from datetime import datetime, timedelta
 
 
-__VERSION__ = "2.2.1"
+__VERSION__ = "2.2.2"
 
 # pylint: disable=attribute-defined-outside-init,unused-argument
 class HomePresenceApp(ad.ADBase):

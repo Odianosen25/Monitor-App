@@ -150,7 +150,6 @@ home_presence_app:
       shutdown_command: sudo /sbin/reboot now
       auto_reboot_at_offline: True
       time: 02:00:01
-  
 ```
 
 ### App Configuration

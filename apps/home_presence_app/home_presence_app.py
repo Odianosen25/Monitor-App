@@ -19,6 +19,7 @@ apps.yaml parameters:
 import json
 import adbase as ad
 import copy
+from datetime import datetime, timedelta
 
 
 __VERSION__ = "2.2.1"
@@ -1042,10 +1043,16 @@ class HomePresenceApp(ad.ADBase):
 
                     if self.args["remote_monitors"][node].get("time") is not None:
                         # there is a time it should be rebooted if need be
-                        time = self.args["remote_monitors"][node]["time"]
+                        reboot_time = self.args["remote_monitors"][node]["time"]
+                        now = self.adbase.datetime()
+                        scheduled_time = datetime.combine(self.adbase.date(), self.adbase.parse_time(reboot_time))
+                        if now > scheduled_time: # the scheduled time is in the past
+                            # run the scheduled time the next day
+                            scheduled_time = scheduled_time + timedelta(days=1)
+
                         self.node_scheduled_reboot[node] = self.adbase.run_at(
                             self.restart_device,
-                            time,
+                            scheduled_time,
                             location=node,
                             auto_rebooting=True,
                         )

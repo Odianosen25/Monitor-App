@@ -1032,6 +1032,11 @@ class HomePresenceApp(ad.ADBase):
                         # a reboot had been scheduled earlier, so must be cancled and started all over
                         # this should technically not need to run, unless there is a bug somewhere
                         self.adbase.cancel_timer(self.node_scheduled_reboot[node])
+                    
+                    self.adbase.log(
+                        f"Scheduling Auto Reboot for Node at {location} as its Offline",
+                        level="WARNING",
+                    )
 
                     if self.args["remote_monitors"][node].get("time") is not None:
                         # there is a time it should be rebooted if need be
@@ -1044,8 +1049,10 @@ class HomePresenceApp(ad.ADBase):
                         )
 
                     else:
+                        # use the same system_check time out for auto rebooting, to give it time to
+                        # reconnect to the network, in case of a network glich
                         self.node_scheduled_reboot[node] = self.adbase.run_in(
-                            self.restart_device, 0, location=node, auto_rebooting=True
+                            self.restart_device, self.system_timeout, location=node, auto_rebooting=True
                         )
 
                 else:

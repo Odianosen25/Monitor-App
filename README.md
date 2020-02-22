@@ -34,7 +34,7 @@ This App is designed to maximise the use of the detection system, so that the us
 - Can schedule a restart of the entire Monitor system at a scheduled time during certain days in the week via the `scheduled_restart` configuration
 - Supports the ability to have the node restarted, if the node is reported to be offline. This will only take place if `auto_reboot_when_offline` is `True`
     
-To use the app, it is required to setup the system in the home as follows:
+To use the app, it is required to setup the Monitor system as follows:
 --------------------------------------------------------------------------
 
 - Have [Home Assistant](https://www.home-assistant.io/getting-started/) and [Appdaemon](https://appdaemon.readthedocs.io/en/latest/INSTALL.html) >= 4.0 running (of course :roll_eyes:)
@@ -61,7 +61,6 @@ To use the app, it is required to setup the system in the home as follows:
 - Have at least a single main node, which runs as `monitor.sh -tdr -a -b` in a location that users stay more often in line with @andrewjfreyer example setup. If having more than 1 monitor, have the rest run as `monitor.sh -tad -a -b` so they only scan on trigger for both arrival and departure.
 - In the main node, have good spacing between scans, not only to avoid unnecessarily flooding your environment with scans but also allowing the app to take over scans intermittently. I have mine set at 120 secs throughout for now
 - Have sensors at the entrances into the home which I termed `gateways`, whether it be doors or garages. Windows also for those that use it :wink:
-
 
 When developing this app, 4 main things were my target:
 -------------------------------------------------------
@@ -121,7 +120,6 @@ home_presence_app:
     # - living_room
     # - kitchen
 
-    
   home_motion_sensors:
     - binary_sensor.living_room_motion_sensor_occupancy
     - binary_sensor.kitchen_motion_sensor_occupancy
@@ -259,6 +257,14 @@ This topic is listened to by the app, and when a message is received it will exe
  
 ### monitor/location/reboot
  This topic is used by the app to reboot a remote monitor node. The `location` parmeter can be a any of the declared nodes in `remote_monitors`. So if wanting to say reboot only the living room's node, simply send an empty payload to `monitor/living_room/reboot`. if the location is `all`, that is an empty payload is sent to `monitor/all/reboot`, this will reboot all the declared remote_monitor nodes.
+
+ Installation:
+--------------
+
+The app can be installed as a regurlar AppDaemon app, but depending on how AppDaemon is installed the following outlines how the app can be installed:
+- If installing the app on a Linux computer without AppDaemon installed on it, then the easiest way will be using the [installation script](https://github.com/Odianosen25/Monitor-App/tree/master/installerscript) described above
+- If using Hass.io, the app is available via HACS as a custom repository for now. It is being reviewed to be added as default
+- If running in a non-Hass.io environment, simply download the repository and copy the `home_presence_app` folder, and place in your `apps` folder. Make the required changes in the `home_presence_app.yaml` file, and AD will automatically pickup the app for instanciation.
 
 RSSI Tracking:
 --------------

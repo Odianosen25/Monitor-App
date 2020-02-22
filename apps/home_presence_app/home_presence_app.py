@@ -929,11 +929,11 @@ class HomePresenceApp(ad.ADBase):
                     host = setting["host"]
                     username = setting["username"]
                     password = setting["password"]
-                    shutdown_command = setting.get(
-                        "shutdown_command", "sudo reboot now"
+                    reboot_command = setting.get(
+                        "reboot_command", "sudo reboot now"
                     )
                     self.restart_hardware(
-                        location, host, username, password, shutdown_command
+                        location, host, username, password, reboot_command
                     )
                 except Exception as e:
                     self.adbase.error(
@@ -1025,14 +1025,14 @@ class HomePresenceApp(ad.ADBase):
             # now check if to auto reboot the node
             if node in self.args.get("remote_monitors", {}):
                 if (
-                    self.args["remote_monitors"][node].get("auto_reboot_at_offline")
+                    self.args["remote_monitors"][node].get("auto_reboot_when_offline")
                     is True
                 ):
                     if self.node_scheduled_reboot.get(node) is not None:
                         # a reboot had been scheduled earlier, so must be cancled and started all over
                         # this should technically not need to run, unless there is a bug somewhere
                         self.adbase.cancel_timer(self.node_scheduled_reboot[node])
-                    
+
                     self.adbase.log(
                         f"Scheduling Auto Reboot for Node at {location} as its Offline",
                         level="WARNING",
@@ -1052,7 +1052,10 @@ class HomePresenceApp(ad.ADBase):
                         # use the same system_check time out for auto rebooting, to give it time to
                         # reconnect to the network, in case of a network glich
                         self.node_scheduled_reboot[node] = self.adbase.run_in(
-                            self.restart_device, self.system_timeout, location=node, auto_rebooting=True
+                            self.restart_device,
+                            self.system_timeout,
+                            location=node,
+                            auto_rebooting=True,
                         )
 
                 else:

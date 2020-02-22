@@ -32,7 +32,7 @@ What this app does is simply to make it easy to integrate the system into Home A
 - Has service calls within AD only, that allows a user to execute its functions from other AD apps
 - Use motion sensors to update Received Signal Strength Indication (RSSI) values in the home, so when users move the `nearest_monitor` can be updated
 - Can schedule a restart of the entire Monitor system at a scheduled time during certain days in the week via the `scheduled_restart` configuration
-- Supports the ability to have the node restarted, if the node is reported to be offline. This will only take place if `auto_reboot_at_offline` is `True`
+- Supports the ability to have the node restarted, if the node is reported to be offline. This will only take place if `auto_reboot_when_offline` is `True`
     
 To use the app, it is required to setup the system in the home as follows:
 --------------------------------------------------------------------------
@@ -138,7 +138,7 @@ home_presence_app:
   remote_monitors:
     disable: False
     kitchen:
-      auto_reboot_at_offline: True
+      auto_reboot_when_offline: True
       host: !secret kitchen_monitor_host
       username: !secret kitchen_monitor_username
       password: !secret kitchen_monitor_password
@@ -147,8 +147,8 @@ home_presence_app:
       host: 192.168.1.xxx
       username: !secret living_room_monitor_username
       password: !secret living_room_monitor_password
-      shutdown_command: sudo /sbin/reboot now
-      auto_reboot_at_offline: True
+      reboot_command: sudo /sbin/reboot now
+      auto_reboot_when_offline: True
       time: 02:00:01
 ```
 
@@ -170,7 +170,7 @@ key | optional | type | default | description
 `system_check`| True | int | 30 | Time in seconds, for the app to check the availability of each monitor node.
 `system_timeout`| True | int | 60 | Time in seconds, for a monitor node not to respond to system check for it to be considered offline.
 `scheduled_restart`| True | dict | | A dictionary specifing the `time` as `str` in `HH:MM:SS` format, first 3 letters of the `days` as a `list` and locations as `list` or `str` the app should restart the nodes on the network. If `remote_monitors` specified and `disabled` is not `True`, it will lead to a reboot of the node's hardware as specified in location. If no location is specified, it will only restart the script.
-`remote_monitors`| True | dict | | The names (locations), login details (`host`, `username` and `password`) optional `shutdown_command` which defaults to `sudo reboot now` of the nodes to be rebooted. Also a parameter `auto_reboot_at_offline` can be added, which instructs the app if to reboot the node when offline, and what `time` to be auto rebooted. 
+`remote_monitors`| True | dict | | The names (locations), login details (`host`, `username` and `password`) optional `reboot_command` which defaults to `sudo reboot now` of the nodes to be rebooted. Also a parameter `auto_reboot_when_offline` can be added, which instructs the app if to reboot the node when offline, and what `time` to be auto rebooted. 
 `home_gateway_sensors`| True | list |  | List of gateway sensors, which can be used by the app to instruct the nodes based on their state if to run a arrive/depart scan. If all home, only depart scan is ran. If all away, arrive scan is ran, and if neither both scans are ran.
 `home_motion_sensors`| True | list |  | List of motion sensors, which can be used by the app to instruct the nodes based on their state if to run rssi scan.
 `known_devices`| True | list |  | List of known devices that are to be loaded into all the nodes on the network
@@ -271,4 +271,4 @@ Hardware Rebooting (WARNING):
 This is a feature which allows the app to remotely reboot a node's hardware, and not just the script it is running. It must be noted to make use of this, an external python package in the `requirements.txt` file most be installed. If using `Hass.io`, do add it to your `python_pakages` list in the config. If running on a standalone Linux system and not using the supplied script above, simply run `pip3 install -r requirements.txt` should install it; depending on which user is running AD. Care should be taken when using this feature, as any device with its details specified within the `remote_monitors` can be rebooted by the app. The hardware within which this app is running, should never be added to the list. Below is listed the conditions that can lead to a hardware reboot: 
 - When a `restart_device` service call is made with the location, the app will also attempt to reboot the hardware
 - When a MQTT message is sent, to the reboot topic
-- When `auto_reboot_at_offline` is set to `True`, and the node is reported to be `offline`. If having network issues, its advisable to give a larger `system_check_timeout` to ensure its not rebooting too often.
+- When `auto_reboot_when_offline` is set to `True`, and the node is reported to be `offline`. If having network issues, its advisable to give a larger `system_check_timeout` to ensure its not rebooting too often.

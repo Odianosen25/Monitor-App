@@ -32,7 +32,7 @@ What this app does is simply to make it easy to integrate the system into Home A
 - Has service calls within AD only, that allows a user to execute its functions from other AD apps
 - Use motion sensors to update Received Signal Strength Indication (RSSI) values in the home, so when users move the `nearest_monitor` can be updated
 - Can schedule a restart of the entire Monitor system at a scheduled time during certain days in the week via the `scheduled_restart` configuration
-- Supports the ability to have the node restarted, if the node is reported to the offline. This will only take place if `auto_reboot_at_offline` is `True`
+- Supports the ability to have the node restarted, if the node is reported to be offline. This will only take place if `auto_reboot_at_offline` is `True`
     
 To use the app, it is required to setup the system in the home as follows:
 --------------------------------------------------------------------------

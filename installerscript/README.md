@@ -26,7 +26,7 @@ bash -c "$(curl -sL https://raw.githubusercontent.com/Odianosen25/Monitor-App/ma
 ```
 ***
 </details></details>
-<br><br>
+<br>
 
 <details><summary><b>Installation Instructions : Standalone - Monitor-App only</b></summary>
 <br>

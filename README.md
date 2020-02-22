@@ -147,6 +147,9 @@ home_presence_app:
       host: 192.168.1.xxx
       username: !secret living_room_monitor_username
       password: !secret living_room_monitor_password
+      shutdown_command: sudo /sbin/reboot now
+      auto_reboot_at_offline: True
+      time: 02:00:01
   
 ```
 
@@ -168,12 +171,11 @@ key | optional | type | default | description
 `system_check`| True | int | 30 | Time in seconds, for the app to check the availability of each monitor node.
 `system_timeout`| True | int | 60 | Time in seconds, for a monitor node not to respond to system check for it to be considered offline.
 `scheduled_restart`| True | dict | | A dictionary specifing the `time` as `str` in `HH:MM:SS` format, first 3 letters of the `days` as a `list` and locations as `list` or `str` the app should restart the nodes on the network. If `remote_monitors` specified and `disabled` is not `True`, it will lead to a reboot of the node's hardware as specified in location. If no location is specified, it will only restart the script.
-`remote_monitors`| True | dict | | The names (locations) and login details (`host`, `username` and `password`) of the nodes to be rebooted. Also a parameter `auto_reboot_at_offline` can be added, which instructs the app if to reboot the node when offline or not.
+`remote_monitors`| True | dict | | The names (locations), login details (`host`, `username` and `password`) optional `shutdown_command` which defaults to `sudo reboot now` of the nodes to be rebooted. Also a parameter `auto_reboot_at_offline` can be added, which instructs the app if to reboot the node when offline, and what `time` to be auto rebooted. 
 `home_gateway_sensors`| True | list |  | List of gateway sensors, which can be used by the app to instruct the nodes based on their state if to run a arrive/depart scan. If all home, only depart scan is ran. If all away, arrive scan is ran, and if neither both scans are ran.
 `home_motion_sensors`| True | list |  | List of motion sensors, which can be used by the app to instruct the nodes based on their state if to run rssi scan.
 `known_devices`| True | list |  | List of known devices that are to be loaded into all the nodes on the network
 `known_beacons`| True | list |  | List of known beacons that data received from them by the app from the nodes, are to be processed by the app
-`remote_monitors`| True | dict |  | Dictionary of the nodes on the network that the app is allowed to reboot. These nodes will be rebooted when it fails the `system_timeout` check, or when the `restart_device` service call is executed. The `host`, `username` and `password` of each node must be specified
 `log_level` | True | `'INFO'` &#124; `'DEBUG'` | `'INFO'` | Switches log level.
 
 Service Calls:

@@ -63,6 +63,7 @@ class HomePresenceApp(ad.ADBase):
         self.location_timers = dict()
         self.home_state_entities = dict()
         self.system_handle = dict()
+        self.node_scheduled_reboot = dict()
 
         # Create a sensor to keep track of if the monitor is busy or not.
         self.monitor_entity = f"{self.presence_name}.monitor_state"
@@ -886,6 +887,13 @@ class HomePresenceApp(ad.ADBase):
             self.args.get("remote_monitors") is not None
             and self.args["remote_monitors"].get("disable") is not True
         ):
+            if (
+                location in self.node_scheduled_reboot
+                and kwargs.get("auto_rebooting") is True
+            ):
+                # it means this is from a scheduled reboot, so reset the handler
+                self.node_scheduled_reboot[location] = None
+
             if location == "all":  # reboot everything
                 # get all locations
                 locations = list(self.args.get("remote_monitors", {}).keys())
@@ -921,19 +929,23 @@ class HomePresenceApp(ad.ADBase):
                     host = setting["host"]
                     username = setting["username"]
                     password = setting["password"]
-                    self.restart_hardware(location, host, username, password)
+                    shutdown_command = setting.get(
+                        "shutdown_command", "sudo reboot now"
+                    )
+                    self.restart_hardware(
+                        location, host, username, password, shutdown_command
+                    )
                 except Exception as e:
                     self.adbase.error(
                         f"Could not restart {location}, due to {e}", level="ERROR"
                     )
 
-    def restart_hardware(self, location, host, username, password):
+    def restart_hardware(self, location, host, username, password, cmd):
         """Used to Restart the Hardware Monitor running in"""
         self.adbase.log(f"Restarting {location}'s Hardware")
         import paramiko
 
         try:
-            cmd = "sudo reboot now"
             ssh = paramiko.SSHClient()
             ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             ssh.connect(host, username=username, password=password)
@@ -993,17 +1005,22 @@ class HomePresenceApp(ad.ADBase):
     def node_state_changed(self, entity, attribute, old, new, kwargs):
         """Respond to a change in the Node's state."""
 
+        location = self.mqtt.get_state(entity, attribute="location", copy=False)
+        node = location.lower().replace(" ", "_")
+
+        if new == "online" and self.node_scheduled_reboot.get(node) is not None:
+            # means there was a scheduled reboot for this node, so should be cancelled
+            self.adbase.cancel_timer(self.node_scheduled_reboot[node])
+            self.node_scheduled_reboot[node] = None
+
         if old == "offline" and new == "online":
             self.adbase.run_in(self.reload_device_state, 0)
 
         elif new == "offline" and old == "online":
-            location = self.mqtt.get_state(entity, attribute="location", copy=False)
             self.adbase.log(
                 f"Node at {location} is Offline, will need to be checked",
                 level="WARNING",
             )
-
-            node = location.lower().replace(" ", "_")
 
             # now check if to auto reboot the node
             if node in self.args.get("remote_monitors", {}):
@@ -1011,7 +1028,25 @@ class HomePresenceApp(ad.ADBase):
                     self.args["remote_monitors"][node].get("auto_reboot_at_offline")
                     is True
                 ):
-                    self.adbase.run_in(self.restart_device, 0, location=node)
+                    if self.node_scheduled_reboot.get(node) is not None:
+                        # a reboot had been scheduled earlier, so must be cancled and started all over
+                        # this should technically not need to run, unless there is a bug somewhere
+                        self.adbase.cancel_timer(self.node_scheduled_reboot[node])
+
+                    if self.args["remote_monitors"][node].get("time") is not None:
+                        # there is a time it should be rebooted if need be
+                        time = self.args["remote_monitors"][node]["time"]
+                        self.node_scheduled_reboot[node] = self.adbase.run_at(
+                            self.restart_device,
+                            time,
+                            location=node,
+                            auto_rebooting=True,
+                        )
+
+                    else:
+                        self.node_scheduled_reboot[node] = self.adbase.run_in(
+                            self.restart_device, 0, location=node, auto_rebooting=True
+                        )
 
                 else:
                     # send a ping to node and log the output for debugging

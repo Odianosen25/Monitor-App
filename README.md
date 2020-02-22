@@ -2,6 +2,8 @@
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg?style=for-the-badge)](https://github.com/custom-components/hacs)
 
+<a href="https://www.buymeacoffee.com/cm5bhML" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-black.png" width="150px" height="35px" alt="Buy Me A Coffee" style="height: 35px !important;width: 150px !important;" ></a>
+
 Appdaemon App for [Andrew's Monitor Presence Detection System](https://github.com/andrewjfreyer/monitor).
 
 The Monitor Presence Detection system, is a Bash script `monitor.sh` created by [Andrew Freyer](https://github.com/andrewjfreyer), which is designed to run on multiple Linux systems like the Raspberry Pi around the home, to detect if persons are near or not. It is designed to work with 1 or more scripts installed on 1 or more computers (like Raspberry Pi) referred to here as nodes, to detect presence. The node uses the onboard Bluetooth adapter to detect Bluetooth devices (phone/watch/beacon/etc) is near and then reports the state from the device on a person (near or not) to a MQTT Broker. More details about the script, how it functions and setup can be found by following this [link](https://github.com/andrewjfreyer/monitor).

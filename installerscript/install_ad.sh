@@ -2,7 +2,7 @@
 # Bash script to install AppDaemon 4.x to a Raspberry Pi 3/4
 # Recommended OS: Latest Raspbian downloaded from raspberrypi.org
 # Run: bash -c "$(curl -sL https://raw.githubusercontent.com/Odianosen25/Monitor-App/master/installerscript/install_ad.sh)"
-
+cd ~
 clear
 echo -e "\e[0m"
 echo -e "\e[96m______  ___            __________                    _______                 \e[90m"
@@ -110,6 +110,17 @@ fi
 #    exit;
 #fi
 
+# Prepare installerscript files for part 2
+if sudo cp -r ~/Monitor-App/installerscript /home/appdaemon/;
+then
+    echo -e "\e[32mPreparation of scriptfiles for part 2 | Done\e[0m"
+else
+    echo -e "\e[31mPreparation of scriptfiles for part 2 | Failed\e[0m"
+    exit;
+fi
+
+sudo cp ~/Monitor-App/apps/home_presence_app/home_presence_app.py /home/appdaemon/installerscript/home_presence_app.py
+
 # Prepare installation part 2 file
 if sudo cp ~/Monitor-App/installerscript/install_ad_part2.sh ~/install_ad_part2.sh;
 then
@@ -145,22 +156,24 @@ else
     exit;
 fi
 
+sudo rm -r /home/appdaemon/installerscript
+
 echo -e "\e[0m"
 echo -e "\e[0m"
 echo -e "\e[0m"
 echo -e "\e[0m"
-echo -e "\e[96mThe final step now are to fill in information about your own\e[90m"
-echo -e "\e[96menvironment, like IP address, username and password ++ for your\e[90m"
-echo -e "\e[96mMQTT broker in appdaemon.conf...\e[90m"
-echo -e "\e[96mYou will find the file here:\e[90m"
-echo -e "\e[32msudo nano /home/appdaemon/.appdaemon/conf/appdaemon.conf\e[0m"
-echo -e "\e[96mFinish the edit with ctrl+o & ctrl+x\e[90m"
+echo -e "\e[32mThe final step now are to fill in information about your own\e[0m"
+echo -e "\e[32menvironment, like IP address, username and password ++ for your\e[0m"
+echo -e "\e[32mMQTT broker in appdaemon.conf...\e[0m"
+echo -e "\e[32mYou will find the file here:\e[0m"
+echo -e "\e[96msudo nano /home/appdaemon/.appdaemon/conf/appdaemon.conf\e[0m"
+echo -e "\e[32mFinish the edit with ctrl+o & ctrl+x\e[0m"
 echo -e "\e[0m"
-echo -e "\e[96mThen you need to edit and complete missing information in\e[90m"
-echo -e "\e[96mapps.yaml that you will find here:\e[90m"
-echo -e "\e[32msudo nano /home/appdaemon/.appdaemon/conf/apps.yaml\e[0m"
-echo -e "\e[96mFinish the edit with ctrl+o & ctrl+x\e[90m"
+echo -e "\e[32mThen you need to edit and complete missing information in\e[0m"
+echo -e "\e[32mapps.yaml that you will find here:\e[0m"
+echo -e "\e[96msudo nano /home/appdaemon/.appdaemon/conf/apps.yaml\e[0m"
+echo -e "\e[32mFinish the edit with ctrl+o & ctrl+x\e[0m"
 echo -e "\e[0m"
-echo -e "\e[96mWhen all above is done, \e[32msudo reboot now\e[96m your device.\e[90m"
-echo -e "\e[96mIf all went well, you should see new entities in HA\e[90m"
+echo -e "\e[32mWhen all above is done, \e[96msudo reboot now\e[32m your device.\e[0m"
+echo -e "\e[32mIf all went well, you should see new entities in HA\e[0m"
 echo -e "\e[0m"

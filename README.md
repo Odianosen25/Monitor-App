@@ -1,9 +1,12 @@
 # Monitor-Appdaemon-App
+
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg?style=for-the-badge)](https://github.com/custom-components/hacs)
+
 Appdaemon App for [Andrew's Monitor Presence Detection System](https://github.com/andrewjfreyer/monitor).
 
-The Monitor Presence Detection system, is a Bash script `monitor.sh` created by [Andrew Freyer](https://github.com/andrewjfreyer), which is designed to run on multiple Linux systems like the Raspberry Pi around the home, to detect if persons are near or not. It is designed to work with 1 or more scripts installed on 1 or more computers (like raspberry) referred to as nodes, to detect presence. The node uses Bluetooth to detect Bluetooth devices (phone/watch/beacon/etc) is near and then reports the state from the device on a person (near or not) to a MQTT Broker. More details about the script, how it functions and setup can be found by following this [link](https://github.com/andrewjfreyer/monitor). This App is designed to maximise the use of the detection system, so that the user can easily have it integrated into their system with as less effort as possible, no matter the number of users or nodes in place.
+The Monitor Presence Detection system, is a Bash script `monitor.sh` created by [Andrew Freyer](https://github.com/andrewjfreyer), which is designed to run on multiple Linux systems like the Raspberry Pi around the home, to detect if persons are near or not. It is designed to work with 1 or more scripts installed on 1 or more computers (like Raspberry Pi) referred to here as nodes, to detect presence. The node uses the onboard Bluetooth adapter to detect Bluetooth devices (phone/watch/beacon/etc) is near and then reports the state from the device on a person (near or not) to a MQTT Broker. More details about the script, how it functions and setup can be found by following this [link](https://github.com/andrewjfreyer/monitor).
 
-What this app does is simply to make it easy to integrate the system into Home Assistant (HA) and AppDaemon (AD). This app can be added to an Appdaemon instance, which will help to auto generate entities for presence detection based on the data reported by each node. With this app, all the user has to do, is to add the app to his AD instance, set it up and all entities and devices will be generated in HA, no matter the number of nodes running in that location or Bluetooth devices to be detected. Added to this, for those that have no Appdaemon running to use this app, this repository also includes a script to easily install both AppDaemona and the Monitor-App in a Linux computer. - contributed by [TheStigh](https://github.com/TheStigh)
+This App is designed to maximise the use of the detection system, so that the user can easily have it integrated into their automation system comprising of Home Assistant (HA) and AppDaemon (AD), with as less effort as possible no matter the number of users or nodes in place. This app when added to an Appdaemon instance, will help to auto generate entities for presence detection based on the data reported by each node in HA, no matter the number of nodes running in that location or Bluetooth devices to be detected. Added to this, for those that have no Appdaemon running to use this app, this repository also includes a script to easily install both AppDaemona and the Monitor-App in a Linux computer. - contributed by [TheStigh](https://github.com/TheStigh)
 
 ## Features
 - Generates sensors in Home Assistant (HA) and AppDaemon (AD) for the following
@@ -19,7 +22,8 @@ What this app does is simply to make it easy to integrate the system into Home A
 - Ability to define the `known_devices` in a single place within AD, which is then loaded to all monitor nodes on the network. This can be useful, if having multiple nodes, and need to manage all `known_devices` from a single place, instead of having to change it in all nodes individually.
 - Generates entities within AD, which has all the data published by the node per device, and can be listened to in other Apps for other automation reasons. For example `rssi` readings based on devices.
 - Constantly checks for all installed monitor nodes on the network, to ensure which is online. If any location doesn't respond after a set time `system_timeout`, it sets all entities generated from that location to `0`. This is very useful if for example, a node reported a device confidence of `100`, then it went down. The device will stay at `100` even if the user had left the house, which will lead to wrong state.
-- Reporting of the state of the entire monitor system, including all nodes state to a MQTT topic. The topic is `monitor/state` 
+- Reporting of the state of the entire monitor system, including all nodes state to a MQTT topic. The topic is `monitor/state`
+- Reporting of the state of each node's state to a MQTT topic. The topic is `monitor/<location>/state` 
 - Requests all devices update from the nodes on the network on a system restart
 - Determines the closest monitor node in an area with more than one, and adds that to the generated user binary sensor. - contributed by [shbatm](https://github.com/shbatm)
 - Supports the use of external MQTT command to instruct the app to executes some tasks like `arrive` scan or hardware reboot. - contributed by [shbatm](https://github.com/shbatm)
@@ -27,8 +31,10 @@ What this app does is simply to make it easy to integrate the system into Home A
 - Has the ability to hardware reboot remote monitor nodes, as its known that after a while the Pi script is running (node) on can get locked and the script doesn't work as efficiently anymore. So instead of simply restarting the script, the app can be set to reboot the hardware itself. This can also be done via mqtt by sending an empty payload to `monitor/<location>/reboot`. More explanation below
 - Has service calls within AD only, that allows a user to execute its functions from other AD apps
 - Use motion sensors to update Received Signal Strength Indication (RSSI) values in the home, so when users move the `nearest_monitor` can be updated
+- Can schedule a restart of the entire Monitor system at a scheduled time during certain days in the week via the `scheduled_restart` configuration
+- Supports the ability to have the node restarted, if the node is reported to be offline. This will only take place if `auto_reboot_when_offline` is `True`
     
-To use the app, it is required to setup the system in the home as follows:
+To use the app, it is required to setup the Monitor system as follows:
 --------------------------------------------------------------------------
 
 - Have [Home Assistant](https://www.home-assistant.io/getting-started/) and [Appdaemon](https://appdaemon.readthedocs.io/en/latest/INSTALL.html) >= 4.0 running (of course :roll_eyes:)
@@ -55,7 +61,6 @@ To use the app, it is required to setup the system in the home as follows:
 - Have at least a single main node, which runs as `monitor.sh -tdr -a -b` in a location that users stay more often in line with @andrewjfreyer example setup. If having more than 1 monitor, have the rest run as `monitor.sh -tad -a -b` so they only scan on trigger for both arrival and departure.
 - In the main node, have good spacing between scans, not only to avoid unnecessarily flooding your environment with scans but also allowing the app to take over scans intermittently. I have mine set at 120 secs throughout for now
 - Have sensors at the entrances into the home which I termed `gateways`, whether it be doors or garages. Windows also for those that use it :wink:
-
 
 When developing this app, 4 main things were my target:
 -------------------------------------------------------
@@ -99,7 +104,22 @@ home_presence_app:
   system_timeout: 60
   home_gateway_sensors:
     - binary_sensor.main_door_contact
-    
+  
+  # reboot the all nodes at 12 midnight on Mondays and Thursdays
+  scheduled_restart:
+    time: 00:00:01
+    days:
+      - mon
+      - thu
+    location: all
+
+  # other location configuration options
+    #location: living_room, kitchen
+
+    #location:
+    # - living_room
+    # - kitchen
+
   home_motion_sensors:
     - binary_sensor.living_room_motion_sensor_occupancy
     - binary_sensor.kitchen_motion_sensor_occupancy
@@ -114,7 +134,9 @@ home_presence_app:
     - xx:xx:xx:xx:xx:xx Odianosen's Car Keys
   
   remote_monitors:
+    disable: False
     kitchen:
+      auto_reboot_when_offline: True
       host: !secret kitchen_monitor_host
       username: !secret kitchen_monitor_username
       password: !secret kitchen_monitor_password
@@ -123,7 +145,9 @@ home_presence_app:
       host: 192.168.1.xxx
       username: !secret living_room_monitor_username
       password: !secret living_room_monitor_password
-  
+      reboot_command: sudo /sbin/reboot now
+      auto_reboot_when_offline: True
+      time: 02:00:01
 ```
 
 ### App Configuration
@@ -142,17 +166,18 @@ key | optional | type | default | description
 `minimum_confidence` | True | int | 50 | Minimum confidence required across all nodes, for a device to be considered departed.
 `not_home_timeout` | True | int | 15 | Time in seconds a device has to be considered away, before registering it deaprted by the app.
 `system_check`| True | int | 30 | Time in seconds, for the app to check the availability of each monitor node.
-`system_timeout`| True | int | 60 | Time in seconds, for a monitor node not to respond to system check for it to be considered offline. If this happens, and the node's login details is specified under `remote_monitors`, the node will be rebooted
+`system_timeout`| True | int | 60 | Time in seconds, for a monitor node not to respond to system check for it to be considered offline.
+`scheduled_restart`| True | dict | | A dictionary specifing the `time` as `str` in `HH:MM:SS` format, first 3 letters of the `days` as a `list` and locations as `list` or `str` the app should restart the nodes on the network. If `remote_monitors` specified and `disabled` is not `True`, it will lead to a reboot of the node's hardware as specified in location. If no location is specified, it will only restart the script.
+`remote_monitors`| True | dict | | The names (locations), login details (`host`, `username` and `password`) optional `reboot_command` which defaults to `sudo reboot now` of the nodes to be rebooted. Also a parameter `auto_reboot_when_offline` can be added, which instructs the app if to reboot the node when offline, and what `time` to be auto rebooted. If `disable` is `True`, the app will not be able to reboot any nodes defined.
 `home_gateway_sensors`| True | list |  | List of gateway sensors, which can be used by the app to instruct the nodes based on their state if to run a arrive/depart scan. If all home, only depart scan is ran. If all away, arrive scan is ran, and if neither both scans are ran.
 `home_motion_sensors`| True | list |  | List of motion sensors, which can be used by the app to instruct the nodes based on their state if to run rssi scan.
 `known_devices`| True | list |  | List of known devices that are to be loaded into all the nodes on the network
 `known_beacons`| True | list |  | List of known beacons that data received from them by the app from the nodes, are to be processed by the app
-`remote_monitors`| True | dict |  | Dictionary of the nodes on the network that the app is allowed to reboot. These nodes will be rebooted when it fails the `system_timeout` check, or when the `restart_device` service call is executed. The `host`, `username` and `password` of each node must be specified
 `log_level` | True | `'INFO'` &#124; `'DEBUG'` | `'INFO'` | Switches log level.
 
 Service Calls:
 --------------
-This app supports the use of some service calls, which can be useful if wanting to use execute some commands in the app from other AD apps. An example service call is 
+This app supports the use of some service calls, which can be useful if wanting to use execute some commands in the app from other AD apps. The domain of the service calls, depends on what is specified as the `monitor_topic`. An example service call is 
 
 ```python
 self.call_service("monitor/remove_known_device", device="xx:xx:xx:xx:xx:xx", namespace=mqtt)
@@ -178,7 +203,7 @@ Used to instruct the app to execute a depart scan on all nodes. If wanting to ex
 
 ```python
 # run depart scan in 10 seconds time
-self.call_service("presence/run_arrive_scan", scan_delay=10, namespace=mqtt)
+self.call_service("presence/run_depart_scan", scan_delay=10, namespace=mqtt)
 ```
 
 ### run_rssi_scan
@@ -233,6 +258,14 @@ This topic is listened to by the app, and when a message is received it will exe
 ### monitor/location/reboot
  This topic is used by the app to reboot a remote monitor node. The `location` parmeter can be a any of the declared nodes in `remote_monitors`. So if wanting to say reboot only the living room's node, simply send an empty payload to `monitor/living_room/reboot`. if the location is `all`, that is an empty payload is sent to `monitor/all/reboot`, this will reboot all the declared remote_monitor nodes.
 
+ Installation:
+--------------
+
+The app can be installed as a regurlar AppDaemon app, but depending on how AppDaemon is installed the following outlines how the app can be installed:
+- If installing the app on a Linux computer without AppDaemon installed on it, then the easiest way will be using the [installation script](https://github.com/Odianosen25/Monitor-App/tree/master/installerscript) described above
+- If using Hass.io, the app is available via HACS as a custom repository for now. It is being reviewed to be added as default
+- If running in a non-Hass.io environment, simply download the repository and copy the `home_presence_app` folder, and place in your `apps` folder. Make the required changes in the `home_presence_app.yaml` file, and AD will automatically pickup the app for instanciation.
+
 RSSI Tracking:
 --------------
 
@@ -242,5 +275,6 @@ Hardware Rebooting (WARNING):
 -----------------------------
 
 This is a feature which allows the app to remotely reboot a node's hardware, and not just the script it is running. It must be noted to make use of this, an external python package in the `requirements.txt` file most be installed. If using `Hass.io`, do add it to your `python_pakages` list in the config. If running on a standalone Linux system and not using the supplied script above, simply run `pip3 install -r requirements.txt` should install it; depending on which user is running AD. Care should be taken when using this feature, as any device with its details specified within the `remote_monitors` can be rebooted by the app. The hardware within which this app is running, should never be added to the list. Below is listed the conditions that can lead to a hardware reboot: 
-- When a `restart_device` service call is made, the app will also attempt to reboot the hardware
+- When a `restart_device` service call is made with the location, the app will also attempt to reboot the hardware
 - When a MQTT message is sent, to the reboot topic
+- When `auto_reboot_when_offline` is set to `True`, and the node is reported to be `offline`. If having network issues, its advisable to give a larger `system_check_timeout` to ensure its not rebooting too often.

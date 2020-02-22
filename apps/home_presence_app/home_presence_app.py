@@ -17,12 +17,11 @@ apps.yaml parameters:
 | - remote_monitors: login details of remote monitors that can be hardware rebooted
 """
 import json
-import datetime
 import adbase as ad
 import copy
 
 
-__VERSION__ = 2.0
+__VERSION__ = "2.1.0"
 
 # pylint: disable=attribute-defined-outside-init,unused-argument
 class HomePresenceApp(ad.ADBase):
@@ -64,6 +63,7 @@ class HomePresenceApp(ad.ADBase):
         self.location_timers = dict()
         self.home_state_entities = dict()
         self.system_handle = dict()
+        self.node_scheduled_reboot = dict()
 
         # Create a sensor to keep track of if the monitor is busy or not.
         self.monitor_entity = f"{self.presence_name}.monitor_state"
@@ -120,18 +120,34 @@ class HomePresenceApp(ad.ADBase):
         for motion_sensor in self.args.get("home_motion_sensors", []):
             self.hass.listen_state(self.motion_detected, motion_sensor)
 
-        # Uncomment to restart the monitor systems every night at midnight
-        # if "remote_monitors" specifed, it will lead to the hardward also being rebooted
-        # time = "00:00:01"
-        # self.adbase.run_daily(self.restart_device, time)
+        if self.args.get("scheduled_restart") is not None:
+            kwargs = {}
+            if "time" in self.args["scheduled_restart"]:
+                time = self.args["scheduled_restart"]["time"]
+
+                if "days" in self.args["scheduled_restart"]:
+                    kwargs["constrain_days"] = ",".join(
+                        self.args["scheduled_restart"]["days"]
+                    )
+
+                if "location" in self.args["scheduled_restart"]:
+                    kwargs["location"] = self.args["scheduled_restart"]["location"]
+
+                self.adbase.log("Setting up Monitor auto reboot")
+                self.adbase.run_daily(self.restart_device, time, **kwargs)
+
+            else:
+                self.adbase.log(
+                    "Will not be setting up auto reboot, as no time specified",
+                    level="WARNING",
+                )
 
         # Setup the system checks.
         if self.system_timeout > system_check:
-            time = datetime.datetime.now() + datetime.timedelta(seconds=1)
             topic = f"{self.presence_topic}/echo"
             self.adbase.run_every(
                 self.send_mqtt_message,
-                time,
+                "now",
                 system_check,
                 topic=topic,
                 payload="",
@@ -280,7 +296,7 @@ class HomePresenceApp(ad.ADBase):
 
         # RSSI Value for a Known Device:
         if action == "rssi":
-            if topic == f"{self.presence_topic}/scan/rssi":
+            if topic == f"{self.presence_topic}/scan/rssi" or payload == "":
                 return
 
             attributes = {
@@ -404,11 +420,17 @@ class HomePresenceApp(ad.ADBase):
 
         self.handle_nodes_state(location, payload)
 
-        entity_id = f"{self.presence_name}.{location}"
+        entity_id = f"{self.presence_name}.{location}_state"
         attributes = {}
 
         if not self.mqtt.entity_exists(entity_id):
-            attributes.update({"friendly_name": location_friendly})
+            attributes.update(
+                {
+                    "friendly_name": f"{location_friendly} State",
+                    "last_rebooted": "",
+                    "location": location_friendly,
+                }
+            )
             # Load devices for all locations:
             self.adbase.run_in(self.load_known_devices, 30)
 
@@ -416,7 +438,12 @@ class HomePresenceApp(ad.ADBase):
 
         if self.system_handle.get(entity_id) is None:
             self.system_handle[entity_id] = self.mqtt.listen_state(
-                self.system_state_changed, entity_id, old="offline", new="online"
+                self.node_state_changed, entity_id
+            )
+
+            # Listen for all changes to the node's entity for MQTT forwarding
+            self.mqtt.listen_state(
+                self.forward_monitor_state, entity_id, attribute="all", immediate=True,
             )
 
     def handle_scanning(self, action, location, scan_type):
@@ -456,7 +483,7 @@ class HomePresenceApp(ad.ADBase):
         if payload != "ok":
             return
 
-        entity_id = f"{self.presence_name}.{location}"
+        entity_id = f"{self.presence_name}.{location}_state"
         if location in self.location_timers:
             self.adbase.cancel_timer(self.location_timers[location])
 
@@ -464,14 +491,14 @@ class HomePresenceApp(ad.ADBase):
             self.clear_location_entities, self.system_timeout, location=location
         )
 
-        if self.mqtt.get_state(entity_id, copy=False) == "offline":
+        if self.mqtt.get_state(entity_id, copy=False) != "online":
             self.mqtt.set_state(entity_id, state="online")
 
             self.handle_nodes_state(location, "online")
 
     def handle_nodes_state(self, location, state):
         """Used to handle the state of the nodes for reporting """
-        location_friendly = location.replace(" ", "_").title()
+        location_friendly = location.replace("_", " ").title()
         state = state.lower()
 
         attributes = self.mqtt.get_state(self.monitor_entity, attribute="all")[
@@ -769,7 +796,7 @@ class HomePresenceApp(ad.ADBase):
         self.monitor_handlers[scan] = None
 
     def forward_monitor_state(self, entity, attribute, old, new, kwargs):
-        """Respond to any changes in the monitor system"""
+        """Respond to any changes in the monitor system or each node"""
         new_state = copy.deepcopy(new)
         data = new_state["attributes"]
 
@@ -779,7 +806,14 @@ class HomePresenceApp(ad.ADBase):
         state = new_state["state"]
         data.update({"last_changed": last_changed, "state": state})
 
-        self.mqtt.mqtt_publish(f"{self.presence_topic}/state", json.dumps(data))
+        if "location" not in data:  # it belongs to the overall monitor system
+            topic = f"{self.presence_topic}/state"
+
+        else:  # it belongs to a node
+            location = data["location"].lower().replace(" ", "_")
+            topic = f"{self.presence_topic}/{location}/state"
+
+        self.mqtt.mqtt_publish(topic, json.dumps(data))
 
     def run_arrive_scan(self, kwargs):
         """Request an arrival scan.
@@ -849,42 +883,69 @@ class HomePresenceApp(ad.ADBase):
         if location is None:  # no specific location specified
             self.mqtt.mqtt_publish(topic, payload)
 
-        else:
-            location = location.lower().replace(" ", "_")
-            if location == "all":  # reboot everything
-                location = None
+        elif (
+            self.args.get("remote_monitors") is not None
+            and self.args["remote_monitors"].get("disable") is not True
+        ):
+            if (
+                location in self.node_scheduled_reboot
+                and kwargs.get("auto_rebooting") is True
+            ):
+                # it means this is from a scheduled reboot, so reset the handler
+                self.node_scheduled_reboot[location] = None
 
-            elif location not in self.args.get("remote_monitors", {}):
+            if location == "all":  # reboot everything
+                # get all locations
+                locations = list(self.args.get("remote_monitors", {}).keys())
+
+            elif isinstance(location, str):
+                locations = location.split(",")
+
+            elif isinstance(location, list):
+                locations = location
+
+            else:
                 self.adbase.log(
-                    f"Location {location} not defined. So cannot restart it",
+                    f"Location {location} not supported. So cannot run hardware reboot",
                     level="WARNING",
                 )
 
                 return
 
-        if self.args.get("remote_monitors") is not None:
-            for remote_device, setting in self.args["remote_monitors"].items():
+            for location in locations:
+                location = location.lower().strip().replace(" ", "_")
 
-                if location is not None and remote_device != location:
+                if location not in self.args["remote_monitors"]:
+                    self.adbase.log(
+                        f"Location {location} not defined. So cannot reboot it",
+                        level="WARNING",
+                    )
+
                     continue
+
+                setting = self.args["remote_monitors"][location]
 
                 try:
                     host = setting["host"]
                     username = setting["username"]
                     password = setting["password"]
-                    self.restart_hardware(remote_device, host, username, password)
+                    reboot_command = setting.get(
+                        "reboot_command", "sudo reboot now"
+                    )
+                    self.restart_hardware(
+                        location, host, username, password, reboot_command
+                    )
                 except Exception as e:
                     self.adbase.error(
-                        f"Could not restart {remote_device}, due to {e}", level="ERROR"
+                        f"Could not restart {location}, due to {e}", level="ERROR"
                     )
 
-    def restart_hardware(self, device, host, username, password):
+    def restart_hardware(self, location, host, username, password, cmd):
         """Used to Restart the Hardware Monitor running in"""
-        self.adbase.log(f"Restarting {device}'s Hardware")
+        self.adbase.log(f"Restarting {location}'s Hardware")
         import paramiko
 
         try:
-            cmd = "sudo reboot now"
             ssh = paramiko.SSHClient()
             ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             ssh.connect(host, username=username, password=password)
@@ -892,13 +953,20 @@ class HomePresenceApp(ad.ADBase):
             completed = stdout.readlines()
             ssh.close()
             self.adbase.log(
-                f"{device} Hardware reset completed with result {completed}",
+                f"{location.title()}'s' Hardware reset completed with result {completed}",
                 level="DEBUG",
+            )
+
+            entity_id = f"{self.presence_name}.{location}_state"
+            self.mqtt.set_state(
+                entity_id,
+                last_rebooted=self.adbase.datetime().replace(microsecond=0).isoformat(),
             )
 
         except Exception as e:
             self.adbase.error(
-                f"Could not restart {device} Monitor Hardware due to {e}", level="ERROR"
+                f"Could not restart {location} Monitor Hardware due to {e}",
+                level="ERROR",
             )
 
     def clear_location_entities(self, kwargs):
@@ -929,14 +997,77 @@ class HomePresenceApp(ad.ADBase):
         if location in self.location_timers:
             self.location_timers.pop(location)
 
-        entity_id = f"{self.presence_name}.{location}"
+        entity_id = f"{self.presence_name}.{location}_state"
         self.mqtt.set_state(entity_id, state="offline")
 
         self.handle_nodes_state(location, "offline")
 
-    def system_state_changed(self, entity, attribute, old, new, kwargs):
-        """Respond to a change in the system state."""
-        self.adbase.run_in(self.reload_device_state, 0)
+    def node_state_changed(self, entity, attribute, old, new, kwargs):
+        """Respond to a change in the Node's state."""
+
+        location = self.mqtt.get_state(entity, attribute="location", copy=False)
+        node = location.lower().replace(" ", "_")
+
+        if new == "online" and self.node_scheduled_reboot.get(node) is not None:
+            # means there was a scheduled reboot for this node, so should be cancelled
+            self.adbase.cancel_timer(self.node_scheduled_reboot[node])
+            self.node_scheduled_reboot[node] = None
+
+        if old == "offline" and new == "online":
+            self.adbase.run_in(self.reload_device_state, 0)
+
+        elif new == "offline" and old == "online":
+            self.adbase.log(
+                f"Node at {location} is Offline, will need to be checked",
+                level="WARNING",
+            )
+
+            # now check if to auto reboot the node
+            if node in self.args.get("remote_monitors", {}):
+                if (
+                    self.args["remote_monitors"][node].get("auto_reboot_when_offline")
+                    is True
+                ):
+                    if self.node_scheduled_reboot.get(node) is not None:
+                        # a reboot had been scheduled earlier, so must be cancled and started all over
+                        # this should technically not need to run, unless there is a bug somewhere
+                        self.adbase.cancel_timer(self.node_scheduled_reboot[node])
+
+                    self.adbase.log(
+                        f"Scheduling Auto Reboot for Node at {location} as its Offline",
+                        level="WARNING",
+                    )
+
+                    if self.args["remote_monitors"][node].get("time") is not None:
+                        # there is a time it should be rebooted if need be
+                        time = self.args["remote_monitors"][node]["time"]
+                        self.node_scheduled_reboot[node] = self.adbase.run_at(
+                            self.restart_device,
+                            time,
+                            location=node,
+                            auto_rebooting=True,
+                        )
+
+                    else:
+                        # use the same system_check time out for auto rebooting, to give it time to
+                        # reconnect to the network, in case of a network glich
+                        self.node_scheduled_reboot[node] = self.adbase.run_in(
+                            self.restart_device,
+                            self.system_timeout,
+                            location=node,
+                            auto_rebooting=True,
+                        )
+
+                else:
+                    # send a ping to node and log the output for debugging
+                    host = self.args["remote_monitor"][node]["host"]
+
+                    import subprocess
+
+                    status, result = subprocess.getstatusoutput(f"ping -c1 -w2 {host}")
+
+                    if status == 1:  # it is offline
+                        self.mqtt.set_state(entity, state="network disconnected")
 
     def monitor_scan_now(self, entity, attribute, old, new, kwargs):
         """Request an immediate scan from the monitors."""

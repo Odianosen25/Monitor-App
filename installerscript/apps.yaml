@@ -5,6 +5,10 @@ home_presence_app:
     - HASS
     - MQTT
   monitor_topic: <your topic here from 'mqtt_topicpath' in 'mqtt_preferences' of monitor>  ### Example monitor
+  user_device_domain: mqtt                # change to device_tracker if you want your devices to appear as device_tracker rather than as binary_sensor
+  everyone_not_home: everyone_not_home    # will be a binary_sensor
+  everyone_home: everyone_home            # will be a binary_sensor
+  somebody_is_home: somebody_is_home      # will be a binary_sensor
   depart_check_time: 30
   minimum_confidence: 80
   not_home_timeout: 15

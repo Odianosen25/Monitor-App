@@ -5,7 +5,7 @@
 Choose your selection of installation path below for instructions
 
 
-### IMPORTANT INFORMATION
+> ## IMPORTANT INFORMATION
 > The scripts are tested on Raspberry only (RPi3 & 4) but should work on most Linux distro's and usernames
 
 <br>
@@ -32,7 +32,7 @@ To execute the updatescript, run following command from your commandline:
 <br>
 
 </details></details>
-***
+<br>
 <br>
 <details><summary><b>Installation Instructions : Standalone - Monitor-App only</b></summary>
 This script will install Monitor-App on an existing AppDaemon 4.x installation.

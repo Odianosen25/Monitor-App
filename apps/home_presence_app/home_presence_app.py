@@ -19,9 +19,10 @@ apps.yaml parameters:
 import json
 import adbase as ad
 import copy
+from datetime import datetime, timedelta
 
 
-__VERSION__ = "2.2.0"
+__VERSION__ = "2.2.1"
 
 # pylint: disable=attribute-defined-outside-init,unused-argument
 class HomePresenceApp(ad.ADBase):
@@ -423,7 +424,11 @@ class HomePresenceApp(ad.ADBase):
         entity_id = f"{self.presence_name}.{location}_state"
         attributes = {}
 
-        if not self.mqtt.entity_exists(entity_id):
+        if (
+            not self.mqtt.entity_exists(entity_id)
+            or self.mqtt.get_state(entity_id, attribute="friendly_name", copy=False)
+            is None
+        ):
             attributes.update(
                 {
                     "friendly_name": f"{location_friendly} State",
@@ -929,9 +934,7 @@ class HomePresenceApp(ad.ADBase):
                     host = setting["host"]
                     username = setting["username"]
                     password = setting["password"]
-                    reboot_command = setting.get(
-                        "reboot_command", "sudo reboot now"
-                    )
+                    reboot_command = setting.get("reboot_command", "sudo reboot now")
                     self.restart_hardware(
                         location, host, username, password, reboot_command
                     )
@@ -1040,10 +1043,16 @@ class HomePresenceApp(ad.ADBase):
 
                     if self.args["remote_monitors"][node].get("time") is not None:
                         # there is a time it should be rebooted if need be
-                        time = self.args["remote_monitors"][node]["time"]
+                        reboot_time = self.args["remote_monitors"][node]["time"]
+                        now = self.adbase.datetime()
+                        scheduled_time = datetime.combine(self.adbase.date(), self.adbase.parse_time(reboot_time))
+                        if now > scheduled_time: # the scheduled time is in the past
+                            # run the scheduled time the next day
+                            scheduled_time = scheduled_time + timedelta(days=1)
+
                         self.node_scheduled_reboot[node] = self.adbase.run_at(
                             self.restart_device,
-                            time,
+                            scheduled_time,
                             location=node,
                             auto_rebooting=True,
                         )

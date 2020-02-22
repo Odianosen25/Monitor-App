@@ -269,5 +269,6 @@ Hardware Rebooting (WARNING):
 -----------------------------
 
 This is a feature which allows the app to remotely reboot a node's hardware, and not just the script it is running. It must be noted to make use of this, an external python package in the `requirements.txt` file most be installed. If using `Hass.io`, do add it to your `python_pakages` list in the config. If running on a standalone Linux system and not using the supplied script above, simply run `pip3 install -r requirements.txt` should install it; depending on which user is running AD. Care should be taken when using this feature, as any device with its details specified within the `remote_monitors` can be rebooted by the app. The hardware within which this app is running, should never be added to the list. Below is listed the conditions that can lead to a hardware reboot: 
-- When a `restart_device` service call is made, the app will also attempt to reboot the hardware
+- When a `restart_device` service call is made with the location, the app will also attempt to reboot the hardware
 - When a MQTT message is sent, to the reboot topic
+- When `auto_reboot_at_offline` is set to `True`, and the node is reported to be `offline`. If having network issues, its advisable to give a larger `system_check_timeout` to ensure its not rebooting too often.

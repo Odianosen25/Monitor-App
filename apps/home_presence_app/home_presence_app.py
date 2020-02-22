@@ -490,7 +490,7 @@ class HomePresenceApp(ad.ADBase):
             self.clear_location_entities, self.system_timeout, location=location
         )
 
-        if self.mqtt.get_state(entity_id, copy=False) == "offline":
+        if self.mqtt.get_state(entity_id, copy=False) != "online":
             self.mqtt.set_state(entity_id, state="online")
 
             self.handle_nodes_state(location, "online")

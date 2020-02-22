@@ -264,7 +264,11 @@ This topic is listened to by the app, and when a message is received it will exe
 The app can be installed as a regurlar AppDaemon app, but depending on how AppDaemon is installed the following outlines how the app can be installed:
 - If installing the app on a Linux computer without AppDaemon installed on it, then the easiest way will be using the [installation script](https://github.com/Odianosen25/Monitor-App/tree/master/installerscript) described above
 - If using Hass.io, the app is available via HACS as a custom repository for now. It is being reviewed to be added as default
-- If running in a non-Hass.io environment, simply download the repository and copy the `home_presence_app` folder, and place in your `apps` folder. Make the required changes in the `home_presence_app.yaml` file, and AD will automatically pickup the app for instanciation.
+- If running in a non-Hass.io environment, simply run the following script
+```
+bash -c "$(curl -sL https://raw.githubusercontent.com/Odianosen25/Monitor-App/master/installerscript/update_ma_only.sh)"
+```
+or download the repository and copy the `home_presence_app` folder, and place in your `apps` folder. Make the required changes in the `home_presence_app.yaml` file, and AD will automatically pickup the app for instanciation.
 
 RSSI Tracking:
 --------------

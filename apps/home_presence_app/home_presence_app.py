@@ -21,7 +21,7 @@ import adbase as ad
 import copy
 
 
-__VERSION__ = "2.1.0"
+__VERSION__ = "2.1.1"
 
 # pylint: disable=attribute-defined-outside-init,unused-argument
 class HomePresenceApp(ad.ADBase):

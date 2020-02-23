@@ -42,9 +42,9 @@ To use the app, it is required to setup the Monitor system as follows:
 - Have [Home Assistant](https://www.home-assistant.io/getting-started/) and [Appdaemon](https://appdaemon.readthedocs.io/en/latest/INSTALL.html) >= 4.0 running (of course :roll_eyes:)
 - If AppDaemon is not installed in the PC to run this app, execute in commandline
     ```
-    bash -c "$(curl -sL https://raw.githubusercontent.com/Odianosen25/Monitor-App/master/installerscript/install_ad.sh)"
+    bash -c "$(curl -sL https://raw.githubusercontent.com/Odianosen25/Monitor-App/master/installer/install_ad.sh)"
     ``` 
-    The script will install AppDaemon and this App alongside. Then make the required changes, as required. Please read more about the [AD install script here](https://github.com/Odianosen25/Monitor-App/blob/dev/installerscript/README.md). - contributed by [TheStigh](https://github.com/TheStigh)
+    The script will install AppDaemon and this App alongside. Then make the required changes, as required. Please read more about the [AD install script here](https://github.com/Odianosen25/Monitor-App/blob/master/installer/README.md). - contributed by [TheStigh](https://github.com/TheStigh)
 - Make use of the Appdaemon MQTT plugin alongside that of HASS. How to setup the MQTT plugin in AD can be seen via this [link](https://appdaemon.readthedocs.io/en/latest/CONFIGURE.html#configuration-of-the-mqtt-plugin). A simple plugin configuration sufficient for this app, in the `appdaemon.yaml` file is seen below.
     ```yaml
     plugins:
@@ -264,13 +264,9 @@ This topic is listened to by the app, and when a message is received it will exe
 --------------
 
 The app can be installed as a regurlar AppDaemon app, but depending on how AppDaemon is installed the following outlines how the app can be installed:
-- If installing the app on a Linux computer without AppDaemon installed on it, then the easiest way will be using the [installation script](https://github.com/Odianosen25/Monitor-App/tree/master/installerscript) described above
+- If installing the app on a Linux computer without AppDaemon installed on it, then the easiest way will be using the [installation script](https://github.com/Odianosen25/Monitor-App/tree/master/installer) described above
 - If using Hass.io, the app is available via HACS as a custom repository for now. It is being reviewed to be added as default
-- If running in a non-Hass.io environment, simply run the following script
-```
-bash -c "$(curl -sL https://raw.githubusercontent.com/Odianosen25/Monitor-App/master/installerscript/update_ma_only.sh)"
-```
-or download the repository and copy the `home_presence_app` folder, and place in your `apps` folder. Make the required changes in the `home_presence_app.yaml` file, and AD will automatically pickup the app for instanciation.
+- If running in a non-Hass.io environment, simply run the same script as above, and select the right installation you want. Or simply download the repository and copy the `home_presence_app` folder, and place in your `apps` folder. Make the required changes in the `home_presence_app.yaml` file, and AD will automatically pickup the app for instanciation.
 
 RSSI Tracking:
 --------------

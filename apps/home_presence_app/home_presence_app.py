@@ -22,7 +22,7 @@ import copy
 from datetime import datetime, timedelta
 
 
-__VERSION__ = "2.2.3"
+__VERSION__ = "2.2.4"
 
 # pylint: disable=attribute-defined-outside-init,unused-argument
 class HomePresenceApp(ad.ADBase):
@@ -114,8 +114,8 @@ class HomePresenceApp(ad.ADBase):
                 "No Gateway Sensors specified, Monitor-APP will run Arrive and Depart Scan every 2 minutes. Please specify Gateway Sensors for a better experience",
                 Level="WARNING",
             )
-            self.adbase.run_every(self.run_arrive_scan, "now", 60)
-            self.adbase.run_every(self.run_depart_scan, "now+1", 60)
+            self.adbase.run_every(self.run_arrive_scan, self.adbase.datetime() + timedelta(seconds=1), 60)
+            self.adbase.run_every(self.run_depart_scan, self.adbase.datetime() + timedelta(seconds=2), 60)
 
         # Setup home motion sensors, used for RSSI tracking
         for motion_sensor in self.args.get("home_motion_sensors", []):
@@ -148,7 +148,7 @@ class HomePresenceApp(ad.ADBase):
             topic = f"{self.presence_topic}/echo"
             self.adbase.run_every(
                 self.send_mqtt_message,
-                "now",
+                self.adbase.datetime() + timedelta(seconds=1),
                 system_check,
                 topic=topic,
                 payload="",

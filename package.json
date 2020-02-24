@@ -1,6 +1,6 @@
 {
   "name": "Monitor-App",
-  "version": "2.2.3",
+  "version": "2.2.4",
   "description": "AppDaemon Monitor-App to control The Monitor Presence Detection system",
   "main": "home_presence_app.py",
   "repository": {

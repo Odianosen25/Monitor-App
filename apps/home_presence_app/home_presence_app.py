@@ -701,6 +701,7 @@ class HomePresenceApp(ad.ADBase):
         """Update the hass sensor if it has changed."""
         if not self.hass.entity_exists(sensor):
             self.adbase.log(f"Entity {sensor} does not exist.", level="ERROR")
+            return
 
         sensor_state = self.hass.get_state(sensor, attribute="all")
         state = sensor_state.get("state")
@@ -892,12 +893,6 @@ class HomePresenceApp(ad.ADBase):
             self.args.get("remote_monitors") is not None
             and self.args["remote_monitors"].get("disable") is not True
         ):
-            if (
-                location in self.node_scheduled_reboot
-                and kwargs.get("auto_rebooting") is True
-            ):
-                # it means this is from a scheduled reboot, so reset the handler
-                self.node_scheduled_reboot[location] = None
 
             if location == "all":  # reboot everything
                 # get all locations
@@ -927,6 +922,13 @@ class HomePresenceApp(ad.ADBase):
                     )
 
                     continue
+
+                if (
+                    location in self.node_scheduled_reboot
+                    and kwargs.get("auto_rebooting") is True
+                ):
+                    # it means this is from a scheduled reboot, so reset the handler
+                    self.node_scheduled_reboot[location] = None
 
                 setting = self.args["remote_monitors"][location]
 
@@ -1013,6 +1015,8 @@ class HomePresenceApp(ad.ADBase):
 
         if new == "online" and self.node_scheduled_reboot.get(node) is not None:
             # means there was a scheduled reboot for this node, so should be cancelled
+            self.adbase.log(f"Cancelling Scheduled Auto Reboot for Node at {location}, as its now back Online")
+
             self.adbase.cancel_timer(self.node_scheduled_reboot[node])
             self.node_scheduled_reboot[node] = None
 

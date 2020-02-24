@@ -1,9 +1,15 @@
 {
   "name": "Monitor-App",
+<<<<<<< HEAD
   "version": "2.2.3",
   "description": "Monitor-Appdaemon-App, to control The Monitor Presence Detection system",
+=======
+  "version": "2.2.1",
+  "description": "AppDaemon Monitor-App to control The Monitor Presence Detection system",
+>>>>>>> 3ffbb8a37a7212acaad2b7a0825810861973a474
   "main": "home_presence_app.py",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Odianosen25/Monitor-App.git"
+  }
 }

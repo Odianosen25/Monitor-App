@@ -112,7 +112,7 @@ class HomePresenceApp(ad.ADBase):
             # no gateway sensors, do app has to run arrive and depart scans every 2 minutes
             self.adbase.log(
                 "No Gateway Sensors specified, Monitor-APP will run Arrive and Depart Scan every 2 minutes. Please specify Gateway Sensors for a better experience",
-                Level="WARNING",
+                level="WARNING",
             )
             self.adbase.run_every(self.run_arrive_scan, self.adbase.datetime() + timedelta(seconds=1), 60)
             self.adbase.run_every(self.run_depart_scan, self.adbase.datetime() + timedelta(seconds=2), 60)

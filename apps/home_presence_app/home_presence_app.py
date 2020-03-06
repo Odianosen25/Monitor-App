@@ -22,7 +22,7 @@ import copy
 from datetime import datetime, timedelta
 
 
-__VERSION__ = "2.2.4"
+__VERSION__ = "2.3.0"
 
 # pylint: disable=attribute-defined-outside-init,unused-argument
 class HomePresenceApp(ad.ADBase):
@@ -112,10 +112,14 @@ class HomePresenceApp(ad.ADBase):
             # no gateway sensors, do app has to run arrive and depart scans every 2 minutes
             self.adbase.log(
                 "No Gateway Sensors specified, Monitor-APP will run Arrive and Depart Scan every 2 minutes. Please specify Gateway Sensors for a better experience",
-                Level="WARNING",
+                level="WARNING",
             )
-            self.adbase.run_every(self.run_arrive_scan, self.adbase.datetime() + timedelta(seconds=1), 60)
-            self.adbase.run_every(self.run_depart_scan, self.adbase.datetime() + timedelta(seconds=2), 60)
+            self.adbase.run_every(
+                self.run_arrive_scan, self.adbase.datetime() + timedelta(seconds=1), 60
+            )
+            self.adbase.run_every(
+                self.run_depart_scan, self.adbase.datetime() + timedelta(seconds=2), 60
+            )
 
         # Setup home motion sensors, used for RSSI tracking
         for motion_sensor in self.args.get("home_motion_sensors", []):
@@ -1015,7 +1019,9 @@ class HomePresenceApp(ad.ADBase):
 
         if new == "online" and self.node_scheduled_reboot.get(node) is not None:
             # means there was a scheduled reboot for this node, so should be cancelled
-            self.adbase.log(f"Cancelling Scheduled Auto Reboot for Node at {location}, as its now back Online")
+            self.adbase.log(
+                f"Cancelling Scheduled Auto Reboot for Node at {location}, as its now back Online"
+            )
 
             self.adbase.cancel_timer(self.node_scheduled_reboot[node])
             self.node_scheduled_reboot[node] = None
@@ -1049,8 +1055,10 @@ class HomePresenceApp(ad.ADBase):
                         # there is a time it should be rebooted if need be
                         reboot_time = self.args["remote_monitors"][node]["time"]
                         now = self.adbase.datetime()
-                        scheduled_time = datetime.combine(self.adbase.date(), self.adbase.parse_time(reboot_time))
-                        if now > scheduled_time: # the scheduled time is in the past
+                        scheduled_time = datetime.combine(
+                            self.adbase.date(), self.adbase.parse_time(reboot_time)
+                        )
+                        if now > scheduled_time:  # the scheduled time is in the past
                             # run the scheduled time the next day
                             scheduled_time = scheduled_time + timedelta(days=1)
 
@@ -1102,15 +1110,16 @@ class HomePresenceApp(ad.ADBase):
     def load_known_devices(self, kwargs):
         """Request all known devices in config to be added to monitors."""
         timer = 0
-        for device in self.args["known_devices"]:
-            self.adbase.run_in(
-                self.send_mqtt_message,
-                timer,
-                topic=f"{self.presence_topic}/setup/ADD STATIC DEVICE",
-                payload=device,
-                scan_type="System",
-            )
-            timer += 15
+        if self.args.get("known_devices") is not None:
+            for device in self.args["known_devices"]:
+                self.adbase.run_in(
+                    self.send_mqtt_message,
+                    timer,
+                    topic=f"{self.presence_topic}/setup/ADD STATIC DEVICE",
+                    payload=device,
+                    scan_type="System",
+                )
+                timer += 15
 
     def remove_known_device(self, kwargs):
         """Request all known devices in config to be deleted from monitors."""
@@ -1124,9 +1133,14 @@ class HomePresenceApp(ad.ADBase):
         )
 
         # now remove the device from AD
-        for entity in self.mqtt.get_state(f"{self.presence_name}", copy=False):
-            if device == self.mqtt.get_state(entity, attribute="id", copy=False):
+        for entity in self.mqtt.get_state(f"{self.presence_name}"):
+            if device == self.mqtt.get_state(entity, attribute="id"):
                 self.mqtt.remove_entity(entity)
+
+        # now remove the device from HA
+        for entity in self.hass.get_state("sensor"):
+            if device == self.mqtt.get_state(entity, attribute="id"):
+                self.hass.remove_entity(entity)
 
     def hass_restarted(self, event_name, data, kwargs):
         """Respond to a HASS Restart."""

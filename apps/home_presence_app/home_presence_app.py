@@ -359,12 +359,28 @@ class HomePresenceApp(ad.ADBase):
             )
 
         if not self.hass.entity_exists(device_state_sensor):
-            # Device Home Presence Sensor Doesn't Exist Yet
+            # Device Home Presence Sensor Doesn't Exist Yet in Hass so create it
             self.adbase.log(
                 "Creating sensor {!r} for Home State".format(device_state_sensor),
                 level="DEBUG",
             )
             self.hass.set_state(
+                device_state_sensor,
+                state=state,
+                attributes={
+                    "friendly_name": f"{friendly_name} Home",
+                    "type": payload_json.get("type", "UNKNOWN_TYPE"),
+                    "device_class": "presence",
+                },
+            )
+        
+        if not self.mqtt.entity_exists(device_state_sensor):
+            # Device Home Presence Sensor Doesn't Exist Yet in MQTT so create it
+            self.adbase.log(
+                "Creating sensor {!r} for Home State".format(device_state_sensor),
+                level="DEBUG",
+            )
+            self.mqtt.set_state(
                 device_state_sensor,
                 state=state,
                 attributes={
@@ -542,6 +558,7 @@ class HomePresenceApp(ad.ADBase):
         """Determine which monitor the device is closest to based on RSSI value."""
         device_entity_id = f"{self.presence_name}_{device_name}"
         device_conf_sensors = self.home_state_entities.get(device_entity_id)
+        device_state_sensor = f"{self.user_device_domain}.{device_entity_id}"
 
         if device_conf_sensors is None:
             self.adbase.log(
@@ -573,9 +590,11 @@ class HomePresenceApp(ad.ADBase):
                 level="DEBUG",
             )
 
+        nearest_monitor = nearest_monitor.replace("_", " ").title()
+        self.mqtt.set_state(device_state_sensor, nearest_monitor=nearest_monitor)
         self.update_hass_sensor(
-            f"{self.user_device_domain}.{device_entity_id}",
-            new_attr={"nearest_monitor": nearest_monitor.replace("_", " ").title()},
+            device_state_sensor,
+            new_attr={"nearest_monitor": nearest_monitor},
         )
 
     def confidence_updated(self, entity, attribute, old, new, kwargs):
@@ -620,7 +639,10 @@ class HomePresenceApp(ad.ADBase):
                 self.adbase.cancel_timer(self.not_home_timers[device_entity_id])
                 self.not_home_timers[device_entity_id] = None
 
+            # update binary sensors for user
+            self.mqtt.set_state(device_state_sensor, state=self.state_true)
             self.update_hass_sensor(device_state_sensor, self.state_true)
+
             self.update_hass_sensor(self.somebody_is_home, "on")
 
             if device_state_sensor in self.all_users_sensors:
@@ -661,6 +683,7 @@ class HomePresenceApp(ad.ADBase):
 
         if all(list(map(lambda x: int(x) < self.minimum_conf, sensor_res))):
             # Confirm for the last time
+            self.mqtt.set_state(device_state_sensor, state=self.state_false)
             self.update_hass_sensor(device_state_sensor, self.state_false)
 
             if device_state_sensor in self.all_users_sensors:
@@ -1096,11 +1119,11 @@ class HomePresenceApp(ad.ADBase):
         locations = self.mqtt.get_state(entity, attribute="locations", copy=False)
 
         if scan_type == "both":
-            self.adbase.run_in(self.run_arrive_scan, 0, location=location)
+            self.adbase.run_in(self.run_arrive_scan, 0, location=locations)
             self.adbase.run_in(self.run_depart_scan, 0, location=locations)
 
         elif scan_type == "arrival":
-            self.adbase.run_in(self.run_arrive_scan, 0, location=location)
+            self.adbase.run_in(self.run_arrive_scan, 0, location=locations)
 
         elif scan_type == "depart":
             self.adbase.run_in(self.run_depart_scan, 0, location=locations)

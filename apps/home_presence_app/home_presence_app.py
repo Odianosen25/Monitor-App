@@ -373,14 +373,14 @@ class HomePresenceApp(ad.ADBase):
                     "device_class": "presence",
                 },
             )
-        
-        if not self.mqtt.entity_exists(device_state_sensor):
-            # Device Home Presence Sensor Doesn't Exist Yet in MQTT so create it
+
+        if not self.adbase.entity_exists(device_state_sensor):
+            # Device Home Presence Sensor Doesn't Exist Yet in default so create it
             self.adbase.log(
                 "Creating sensor {!r} for Home State".format(device_state_sensor),
                 level="DEBUG",
             )
-            self.mqtt.set_state(
+            self.adbase.set_state(
                 device_state_sensor,
                 state=state,
                 attributes={
@@ -591,10 +591,9 @@ class HomePresenceApp(ad.ADBase):
             )
 
         nearest_monitor = nearest_monitor.replace("_", " ").title()
-        self.mqtt.set_state(device_state_sensor, nearest_monitor=nearest_monitor)
+        self.adbase.set_state(device_state_sensor, nearest_monitor=nearest_monitor)
         self.update_hass_sensor(
-            device_state_sensor,
-            new_attr={"nearest_monitor": nearest_monitor},
+            device_state_sensor, new_attr={"nearest_monitor": nearest_monitor},
         )
 
     def confidence_updated(self, entity, attribute, old, new, kwargs):
@@ -640,7 +639,7 @@ class HomePresenceApp(ad.ADBase):
                 self.not_home_timers[device_entity_id] = None
 
             # update binary sensors for user
-            self.mqtt.set_state(device_state_sensor, state=self.state_true)
+            self.adbase.set_state(device_state_sensor, state=self.state_true)
             self.update_hass_sensor(device_state_sensor, self.state_true)
 
             self.update_hass_sensor(self.somebody_is_home, "on")
@@ -683,7 +682,7 @@ class HomePresenceApp(ad.ADBase):
 
         if all(list(map(lambda x: int(x) < self.minimum_conf, sensor_res))):
             # Confirm for the last time
-            self.mqtt.set_state(device_state_sensor, state=self.state_false)
+            self.adbase.set_state(device_state_sensor, state=self.state_false)
             self.update_hass_sensor(device_state_sensor, self.state_false)
 
             if device_state_sensor in self.all_users_sensors:

@@ -4,11 +4,61 @@ home_presence_app:
   plugin: 
     - HASS
     - MQTT
+  #monitor_topic: presence
+  #mqtt_event: MQTT
+  #user_device_domain: device_tracker
+  #everyone_not_home: everyone_not_home
+  #everyone_home: everyone_home
+  #somebody_is_home: somebody_is_home
+  depart_check_time: 30
+  depart_scans: 3
+  minimum_confidence: 60
+  not_home_timeout: 15
+  system_check: 30
+  system_timeout: 60
   home_gateway_sensors:
-    - binary_sensor.main_door
+    - binary_sensor.main_door_contact
   
-  scheduled_restart: 
-    time: "00:00:01"
+  # reboot the all nodes at 12 midnight on Mondays and Thursdays
+  scheduled_restart:
+    time: 00:00:01
     days:
-      - wed
-      - sat
+      - mon
+      - thu
+    location: all
+
+  # other location configuration options
+    #location: living_room, kitchen
+
+    #location:
+    # - living_room
+    # - kitchen
+
+  home_motion_sensors:
+    - binary_sensor.living_room_motion_sensor_occupancy
+    - binary_sensor.kitchen_motion_sensor_occupancy
+    - binary_sensor.hallway_motion_sensor_occupancy
+    
+  #log_level: DEBUG
+  known_devices:
+    - xx:xx:xx:xx:xx:xx Odianosen's iPhone
+    - xx:xx:xx:xx:xx:xx Nkiruka's iPad
+  
+  known_beacons:
+    - xx:xx:xx:xx:xx:xx Odianosen's Car Keys
+  
+  remote_monitors:
+    disable: False
+    kitchen:
+      auto_reboot_when_offline: True
+      host: !secret kitchen_monitor_host
+      username: !secret kitchen_monitor_username
+      password: !secret kitchen_monitor_password
+    
+    living_room:
+      host: 192.168.1.xxx
+      username: !secret living_room_monitor_username
+      password: !secret living_room_monitor_password
+      reboot_command: sudo /sbin/reboot now
+      auto_reboot_when_offline: True
+      time: 02:00:01

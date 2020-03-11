@@ -1054,7 +1054,7 @@ class HomePresenceApp(ad.ADBase):
 
             self.adbase.cancel_timer(self.node_scheduled_reboot[node])
             self.node_scheduled_reboot[node] = None
-            self.mqtt.set_state(entity, reboot_scheduled=False, reboot_time="00:00:00")
+            self.mqtt.set_state(entity, reboot_scheduled=False)
 
         if old == "offline" and new == "online":
             self.adbase.run_in(self.reload_device_state, 0)

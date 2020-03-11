@@ -312,9 +312,12 @@ class HomePresenceApp(ad.ADBase):
                 f"Recieved an RSSI of {payload} for {device_name} from {location_friendly}",
                 level="DEBUG",
             )
-            self.mqtt.set_state(appdaemon_entity, attributes=attributes)
-            self.update_hass_sensor(device_conf_sensor, new_attr={"rssi": payload})
-            self.update_nearest_monitor(device_name)
+
+            if self.hass.entity_exists(device_conf_sensor):
+                # unless it exists, don't update RSSI
+                self.mqtt.set_state(appdaemon_entity, attributes=attributes)
+                self.update_hass_sensor(device_conf_sensor, new_attr={"rssi": payload})
+                self.update_nearest_monitor(device_name)
             return
 
         # Ignore invalid JSON responses

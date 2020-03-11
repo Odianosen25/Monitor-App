@@ -730,7 +730,8 @@ class HomePresenceApp(ad.ADBase):
     def update_hass_sensor(self, sensor, new_state=None, new_attr=None):
         """Update the hass sensor if it has changed."""
         if not self.hass.entity_exists(sensor):
-            self.adbase.log(f"Entity {sensor} does not exist.", level="ERROR")
+            self.adbase.log(f"Entity {sensor} does not exist, running arrival scan.", level="ERROR")
+            self.adbase.run_in(self.run_arrive_scan, 0)
             return
 
         sensor_state = self.hass.get_state(sensor, attribute="all")

@@ -654,10 +654,10 @@ class HomePresenceApp(ad.ADBase):
             and device_state_sensor_value not in ["off", "not_home"]
             and int(new) == 0
         ):
-            if "BEACON" not in str(device_type):
-                # Run another scan before declaring the user away as extra
-                # check within the timeout time if this isn't a beacon
-                self.adbase.run_in(self.run_arrive_scan, 0)
+            #if "BEACON" not in str(device_type):
+            # Run another scan before declaring the user away as extra
+            # check within the timeout time if this isn't a beacon
+            self.adbase.run_in(self.run_arrive_scan, 0)
 
             self.not_home_timers[device_entity_id] = self.adbase.run_in(
                 self.not_home_func, self.timeout, device_entity_id=device_entity_id
@@ -682,8 +682,8 @@ class HomePresenceApp(ad.ADBase):
 
         if all(list(map(lambda x: int(x) < self.minimum_conf, sensor_res))):
             # Confirm for the last time
-            self.adbase.set_state(device_state_sensor, state=self.state_false)
-            self.update_hass_sensor(device_state_sensor, self.state_false)
+            self.adbase.set_state(device_state_sensor, state=self.state_false, nearest_monitor="unknown")
+            self.update_hass_sensor(device_state_sensor, self.state_false, {"nearest_monitor": "unknown"})
 
             if device_state_sensor in self.all_users_sensors:
                 # At least someone not home, set Everyone Home to off

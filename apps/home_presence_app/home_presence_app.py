@@ -730,7 +730,9 @@ class HomePresenceApp(ad.ADBase):
     def update_hass_sensor(self, sensor, new_state=None, new_attr=None):
         """Update the hass sensor if it has changed."""
         if not self.hass.entity_exists(sensor):
-            self.adbase.log(f"Entity {sensor} does not exist, running arrival scan.", level="ERROR")
+            self.adbase.log(
+                f"Entity {sensor} does not exist, running arrival scan.", level="ERROR"
+            )
             self.adbase.run_in(self.run_arrive_scan, 0)
             return
 
@@ -1174,14 +1176,36 @@ class HomePresenceApp(ad.ADBase):
         )
 
         # now remove the device from AD
+        device_name = None
         for entity in self.mqtt.get_state(f"{self.presence_name}"):
             if device == self.mqtt.get_state(entity, attribute="id"):
+                location = self.mqtt.get_state(entity, attribute="location")
+                node = location.replace(" ", "_").lower()
                 self.mqtt.remove_entity(entity)
+                if device_name is None:
+                    _, domain_device = self.mqtt.split_entity(entity)
+                    device_name = domain_device.replace(f"_{node}", "")
 
         # now remove the device from HA
         for entity in self.hass.get_state("sensor"):
-            if device == self.mqtt.get_state(entity, attribute="id"):
+            if device == self.hass.get_state(entity, attribute="id"):
                 self.hass.remove_entity(entity)
+
+        if device_name is not None:
+            device_entity_id = f"{self.presence_name}_{device_name}"
+            device_state_sensor = f"{self.user_device_domain}.{device_entity_id}"
+
+            if device_entity_id in self.home_state_entities:
+                del self.home_state_entities[device_entity_id]
+
+            if device_state_sensor in self.all_users_sensors:
+                self.all_users_sensors.remove(device_state_sensor)
+
+            # now remove for HA
+            self.hass.remove_entity(device_state_sensor)
+
+            # now remove for AD
+            self.adbase.remove_entity(device_state_sensor)
 
     def hass_restarted(self, event_name, data, kwargs):
         """Respond to a HASS Restart."""

@@ -206,6 +206,7 @@ class HomePresenceApp(ad.ADBase):
             "friendly_name": sensor.replace("_", " ").title(),
             "device_class": "presence",
         }
+
         self.hass.set_state(
             f"binary_sensor.{sensor}", state="off", attributes=attributes
         )
@@ -377,13 +378,13 @@ class HomePresenceApp(ad.ADBase):
                 },
             )
 
-        if not self.adbase.entity_exists(device_state_sensor):
+        if not self.mqtt.entity_exists(device_state_sensor):
             # Device Home Presence Sensor Doesn't Exist Yet in default so create it
             self.adbase.log(
                 "Creating sensor {!r} for Home State".format(device_state_sensor),
                 level="DEBUG",
             )
-            self.adbase.set_state(
+            self.mqtt.set_state(
                 device_state_sensor,
                 state=state,
                 attributes={
@@ -594,7 +595,7 @@ class HomePresenceApp(ad.ADBase):
             )
 
         nearest_monitor = nearest_monitor.replace("_", " ").title()
-        self.adbase.set_state(device_state_sensor, nearest_monitor=nearest_monitor)
+        self.mqtt.set_state(device_state_sensor, nearest_monitor=nearest_monitor)
         self.update_hass_sensor(
             device_state_sensor, new_attr={"nearest_monitor": nearest_monitor},
         )
@@ -642,7 +643,7 @@ class HomePresenceApp(ad.ADBase):
                 self.not_home_timers[device_entity_id] = None
 
             # update binary sensors for user
-            self.adbase.set_state(device_state_sensor, state=self.state_true)
+            self.mqtt.set_state(device_state_sensor, state=self.state_true)
             self.update_hass_sensor(device_state_sensor, self.state_true)
 
             self.update_hass_sensor(self.somebody_is_home, "on")
@@ -685,7 +686,7 @@ class HomePresenceApp(ad.ADBase):
 
         if all(list(map(lambda x: int(x) < self.minimum_conf, sensor_res))):
             # Confirm for the last time
-            self.adbase.set_state(
+            self.mqtt.set_state(
                 device_state_sensor, state=self.state_false, nearest_monitor="unknown"
             )
             self.update_hass_sensor(
@@ -966,7 +967,7 @@ class HomePresenceApp(ad.ADBase):
                 ):
                     # it means this is from a scheduled reboot, so reset the handler
                     self.node_scheduled_reboot[node] = None
-                    self.mqtt.set_state(entity_id, reboot_scheduled=False)
+                    self.mqtt.set_state(entity_id, reboot_scheduled="off")
 
                 setting = self.args["remote_monitors"][node]
 
@@ -1060,7 +1061,7 @@ class HomePresenceApp(ad.ADBase):
 
             self.adbase.cancel_timer(self.node_scheduled_reboot[node])
             self.node_scheduled_reboot[node] = None
-            self.mqtt.set_state(entity, reboot_scheduled=False)
+            self.mqtt.set_state(entity, reboot_scheduled="off")
 
         if old == "offline" and new == "online":
             self.adbase.run_in(self.reload_device_state, 0)
@@ -1122,7 +1123,7 @@ class HomePresenceApp(ad.ADBase):
                         ).isoformat()
 
                     self.mqtt.set_state(
-                        entity, reboot_scheduled=True, reboot_time=reboot_time
+                        entity, reboot_scheduled="on", reboot_time=reboot_time
                     )
 
                 else:
@@ -1208,7 +1209,7 @@ class HomePresenceApp(ad.ADBase):
             self.hass.remove_entity(device_state_sensor)
 
             # now remove for AD
-            self.adbase.remove_entity(device_state_sensor)
+            self.mqtt.remove_entity(device_state_sensor)
 
     def hass_restarted(self, event_name, data, kwargs):
         """Respond to a HASS Restart."""

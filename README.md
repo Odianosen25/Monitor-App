@@ -100,6 +100,7 @@ home_presence_app:
   #everyone_home: everyone_home
   #somebody_is_home: somebody_is_home
   depart_check_time: 30
+  depart_scans: 3
   minimum_confidence: 60
   not_home_timeout: 15
   system_check: 30
@@ -165,6 +166,7 @@ key | optional | type | default | description
 `everyone_not_home` | True | string | `everyone_not_home` | Binary sensor name to be used, to indicate everyone is not home.
 `someone_is_home` | True | string | `someone_is_home` | Binary sensor name to be used, to indicate someone is home.
 `depart_check_time` | True | int | 30 | Delay in seconds, before depart scan is ran. This depends on how long it takes the user to leave the door and not being picked up by a monitor node.
+`depart_scans` | True | int | 3 | The number of times the depart scans should be ran. This useful for those that spend some time within areas the system can still pick them up, even though they have left the house.
 `minimum_confidence` | True | int | 50 | Minimum confidence required across all nodes, for a device to be considered departed.
 `not_home_timeout` | True | int | 15 | Time in seconds a device has to be considered away, before registering it deaprted by the app.
 `system_check`| True | int | 30 | Time in seconds, for the app to check the availability of each monitor node.

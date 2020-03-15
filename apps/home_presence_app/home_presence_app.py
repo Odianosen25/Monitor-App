@@ -419,6 +419,10 @@ class HomePresenceApp(ad.ADBase):
         if device_state_sensor not in self.all_users_sensors:
             self.all_users_sensors.append(device_state_sensor)
 
+            # now listen to this sensor's state changes
+            # used to check if the user was not home before, and if home run rssi immediately to determine closest monitor
+            self.mqtt.listen_state(self.device_state_changed, device_state_sensor)
+
         if device_entity_id not in self.not_home_timers:
             self.not_home_timers[device_entity_id] = None
 
@@ -667,6 +671,11 @@ class HomePresenceApp(ad.ADBase):
                 self.not_home_func, self.timeout, device_entity_id=device_entity_id
             )
             self.adbase.log(f"Timer Started for {device_entity_id}", level="DEBUG")
+        
+    def device_state_changed(self, entity, attribute, old, new, kwargs):
+        """Used to run RSSI scan in the event the device Left the house and re-entered"""
+        if new == self.state_true and old == self.state_false:
+            self.adbase.run_in(self.run_rssi_scan, 0)
 
     def not_home_func(self, kwargs):
         """Manage devices that are not home."""

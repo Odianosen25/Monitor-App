@@ -65,6 +65,7 @@ class HomePresenceApp(ad.ADBase):
         self.home_state_entities = dict()
         self.system_handle = dict()
         self.node_scheduled_reboot = dict()
+        self.node_rebooting = dict()
 
         # Create a sensor to keep track of if the monitor is busy or not.
         self.monitor_entity = f"{self.presence_name}.monitor_state"
@@ -294,6 +295,7 @@ class HomePresenceApp(ad.ADBase):
             device_name = device_name.replace(":", "_").replace("-", "_")
 
         device_entity_id = f"{self.presence_name}_{device_name}"
+        device_state_sensor = f"{self.user_device_domain}.{device_entity_id}"
         device_entity_prefix = f"{device_entity_id}_{location}"
         device_conf_sensor = f"sensor.{device_entity_prefix}_conf"
         device_local = f"{device_name}_{location}"
@@ -314,8 +316,12 @@ class HomePresenceApp(ad.ADBase):
                 level="DEBUG",
             )
 
-            if self.hass.entity_exists(device_conf_sensor):
-                # unless it exists, don't update RSSI
+            if (
+                self.hass.entity_exists(device_conf_sensor)
+                and self.hass.get_state(device_state_sensor, copy=False)
+                == self.state_true
+            ):
+                # unless it exists, and the device is home don't update RSSI
                 self.mqtt.set_state(appdaemon_entity, attributes=attributes)
                 self.update_hass_sensor(device_conf_sensor, new_attr={"rssi": payload})
                 self.update_nearest_monitor(device_name)
@@ -345,7 +351,6 @@ class HomePresenceApp(ad.ADBase):
         confidence = int(float(payload_json.get("confidence", "0")))
         del payload_json["confidence"]
 
-        device_state_sensor = f"{self.user_device_domain}.{device_entity_id}"
         state = self.state_true if confidence >= self.minimum_conf else self.state_false
 
         if not self.hass.entity_exists(device_conf_sensor):
@@ -421,7 +426,12 @@ class HomePresenceApp(ad.ADBase):
 
             # now listen to this sensor's state changes
             # used to check if the user was not home before, and if home run rssi immediately to determine closest monitor
-            self.mqtt.listen_state(self.device_state_changed, device_state_sensor)
+            self.mqtt.listen_state(
+                self.device_state_changed,
+                device_state_sensor,
+                device_name=device_name,
+                immediate=True,
+            )
 
         if device_entity_id not in self.not_home_timers:
             self.not_home_timers[device_entity_id] = None
@@ -580,14 +590,14 @@ class HomePresenceApp(ad.ADBase):
         rssi_values = {
             loc.replace(f"sensor.{device_entity_id}_", "").replace(
                 "_conf", ""
-            ): self.hass.get_state(loc, attribute="rssi", default="-99")
+            ): self.hass.get_state(loc, attribute="rssi")
             for loc in device_conf_sensors
         }
 
         rssi_values = {
             loc: int(rssi)
             for loc, rssi in rssi_values.items()
-            if rssi is not None and str(rssi) != "-99"
+            if rssi is not None and rssi != "unknown"
         }
 
         nearest_monitor = "unknown"
@@ -671,11 +681,24 @@ class HomePresenceApp(ad.ADBase):
                 self.not_home_func, self.timeout, device_entity_id=device_entity_id
             )
             self.adbase.log(f"Timer Started for {device_entity_id}", level="DEBUG")
-        
+
     def device_state_changed(self, entity, attribute, old, new, kwargs):
         """Used to run RSSI scan in the event the device Left the house and re-entered"""
-        if new == self.state_true and old == self.state_false:
+
+        device_name = kwargs["device_name"]
+        device_entity_id = f"{self.presence_name}_{device_name}"
+        if new == self.state_true:  # device now home
             self.adbase.run_in(self.run_rssi_scan, 0)
+
+        elif new == self.state_false:  # device is away
+            device_conf_sensors = self.home_state_entities[device_entity_id]
+            # now set all of their sensor's rssi to unknown to indicate its way
+            for sensor in device_conf_sensors:
+                location = self.hass.get_state(sensor, attribute="location", copy=False)
+                device_local = f"{device_name}_{location}"
+                appdaemon_entity = f"{self.presence_name}.{device_local}"
+                self.mqtt.set_state(appdaemon_entity, rssi="unknown")
+                self.update_hass_sensor(sensor, new_attr={"rssi": "unknown"})
 
     def not_home_func(self, kwargs):
         """Manage devices that are not home."""
@@ -985,9 +1008,25 @@ class HomePresenceApp(ad.ADBase):
                     username = setting["username"]
                     password = setting["password"]
                     reboot_command = setting.get("reboot_command", "sudo reboot now")
-                    self.restart_hardware(
-                        node, host, username, password, reboot_command
-                    )
+
+                    # use executor here, as sometimes due to being unable to process it
+                    # as the node might be busy, could lead to AD hanging
+
+                    node_task = self.node_rebooting.get(node)
+                    if node_task is None or (
+                        node_task is not None
+                        and (node_task.done() or node_task.cancelled())
+                    ):
+                        # meaning its either not running, or had completed or cancelled
+                        self.node_rebooting[node] = self.AD.executor.submit(
+                            self.restart_hardware,
+                            node,
+                            host,
+                            username,
+                            password,
+                            reboot_command,
+                        )
+
                 except Exception as e:
                     self.adbase.error(
                         f"Could not restart {node}, due to {e}", level="ERROR"

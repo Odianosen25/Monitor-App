@@ -652,7 +652,7 @@ class HomePresenceApp(ad.ADBase):
             list(map(lambda x: int(x) >= self.minimum_conf, sensor_res))
         ):
             # Cancel the running timer.
-            if self.not_home_timers[device_entity_id] is not None:
+            if self.not_home_timers.get(device_entity_id) is not None:
                 self.adbase.cancel_timer(self.not_home_timers[device_entity_id])
                 self.not_home_timers[device_entity_id] = None
 
@@ -668,7 +668,7 @@ class HomePresenceApp(ad.ADBase):
             return
 
         if (
-            self.not_home_timers[device_entity_id] is None
+            self.not_home_timers.get(device_entity_id) is None
             and device_state_sensor_value not in ["off", "not_home"]
             and int(new) == 0
         ):
@@ -1176,7 +1176,7 @@ class HomePresenceApp(ad.ADBase):
 
                 else:
                     # send a ping to node and log the output for debugging
-                    host = self.args["remote_monitor"][node]["host"]
+                    host = self.args["remote_monitors"][node]["host"]
 
                     import subprocess
 

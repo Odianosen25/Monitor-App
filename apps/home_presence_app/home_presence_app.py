@@ -20,6 +20,7 @@ import json
 import adbase as ad
 import copy
 from datetime import datetime, timedelta
+import traceback
 
 
 __VERSION__ = "2.3.3"
@@ -1027,6 +1028,13 @@ class HomePresenceApp(ad.ADBase):
                             reboot_command,
                         )
 
+                        # run timer used to cancel the restart device task in case it hangs
+                        self.adbase.run_in(
+                            self.restart_device_cancel_timer,
+                            self.system_timeout,
+                            node=node,
+                        )
+
                 except Exception as e:
                     self.adbase.error(
                         f"Could not restart {node}, due to {e}", level="ERROR"
@@ -1056,11 +1064,24 @@ class HomePresenceApp(ad.ADBase):
                 last_rebooted=self.adbase.datetime().replace(microsecond=0).isoformat(),
             )
 
-        except Exception as e:
+        except Exception:
+            self.adbase.error(traceback.format_exc(), leve="ERROR")
             self.adbase.error(
-                f"Could not restart {location} Monitor Hardware due to {e}",
-                level="ERROR",
+                f"Could not restart {location} Monitor Hardware", level="ERROR",
             )
+
+    def restart_device_cancel_timer(self, kwargs):
+        """Used to cancel the restart device task"""
+
+        node = kwargs["node"]
+
+        if self.node_rebooting.get(node) is None:
+            return
+
+        if self.node_rebooting[node].done():
+            self.node_rebooting[node].cancel()
+
+        self.node_rebooting[node] = None
 
     def clear_location_entities(self, kwargs):
         """Clear sensors from an offline location.
@@ -1321,3 +1342,13 @@ class HomePresenceApp(ad.ADBase):
             kwargs["location"] = kwargs["location"].replace(" ", "_").lower()
 
         self.adbase.run_in(func, 0, **kwargs)
+
+    def terminate(self):
+        for node in self.node_rebooting:
+            if self.node_rebooting[node] is not None:
+                if (
+                    not self.node_rebooting[node].done()
+                    and not self.node_rebooting[node].canlled()
+                ):
+                    # this means its still running, so cancel the task
+                    self.node_rebooting[node].cancel()

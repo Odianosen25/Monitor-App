@@ -1078,7 +1078,7 @@ class HomePresenceApp(ad.ADBase):
         if self.node_rebooting.get(node) is None:
             return
 
-        if self.node_rebooting[node].done():
+        if not self.node_rebooting[node].done():
             self.node_rebooting[node].cancel()
 
         self.node_rebooting[node] = None

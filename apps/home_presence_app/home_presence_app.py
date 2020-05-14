@@ -1341,6 +1341,10 @@ class HomePresenceApp(ad.ADBase):
         if "location" in kwargs:
             kwargs["location"] = kwargs["location"].replace(" ", "_").lower()
 
+        if "delay" in kwargs:
+            scan_delay = kwargs.pop("delay")
+            kwargs["scan_delay"] = scan_delay
+
         self.adbase.run_in(func, 0, **kwargs)
 
     def terminate(self):

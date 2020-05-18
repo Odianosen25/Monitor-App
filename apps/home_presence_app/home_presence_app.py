@@ -23,7 +23,7 @@ from datetime import datetime, timedelta
 import traceback
 
 
-__VERSION__ = "2.3.3"
+__VERSION__ = "2.3.4"
 
 # pylint: disable=attribute-defined-outside-init,unused-argument
 class HomePresenceApp(ad.ADBase):

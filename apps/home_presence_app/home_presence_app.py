@@ -632,6 +632,12 @@ class HomePresenceApp(ad.ADBase):
 
             self.adbase.run_in(self.run_arrive_scan, 0)
             return
+        
+        if int(new) == 0: # the confidence is 0, so rssi should be lower
+            # unknown used just to ensure it doesn't clash with an active node
+            appdaemon_conf_sensor = self.hass_conf_sensor_to_appdaemon_conf(entity)
+            self.mqtt.set_state(appdaemon_conf_sensor, rssi="unknown")
+            self.update_hass_sensor(entity, new_attr={"rssi": "unknown"})
 
         sensor_res = list(
             map(lambda x: self.hass.get_state(x, copy=False), device_conf_sensors)
@@ -1100,13 +1106,10 @@ class HomePresenceApp(ad.ADBase):
             for sensor in entity_list:
                 if location in sensor:  # that sensor belongs to that location
                     self.update_hass_sensor(sensor, 0)
-                    device_entity_prefix = sensor.replace(
-                        f"sensor.{self.presence_name}_", ""
-                    ).replace("_conf", "")
-
-                    appdaemon_entity = f"{self.presence_name}.{device_entity_prefix}"
-                    self.mqtt.set_state(appdaemon_entity, state=0, rssi="-99")
-                    self.update_hass_sensor(sensor, new_attr={"rssi": "-99"})
+                    appdaemon_conf_sensor = self.hass_conf_sensor_to_appdaemon_conf(sensor)
+                    # set to "unknown" since it had been cleared
+                    self.mqtt.set_state(appdaemon_conf_sensor, state=0, rssi="unknown")
+                    self.update_hass_sensor(sensor, new_attr={"rssi": "unknown"})
 
         if location in self.location_timers:
             self.location_timers.pop(location)
@@ -1115,6 +1118,17 @@ class HomePresenceApp(ad.ADBase):
         self.mqtt.set_state(entity_id, state="offline")
 
         self.handle_nodes_state(location, "offline")
+    
+    def hass_conf_sensor_to_appdaemon_conf(self, sensor):
+        """used to convert HASS confidence sensor to AD's"""
+
+        device_entity_prefix = sensor.replace(
+            f"sensor.{self.presence_name}_", ""
+        ).replace("_conf", "")
+
+        appdaemon_conf_sensor = f"{self.presence_name}.{device_entity_prefix}"
+
+        return appdaemon_conf_sensor
 
     def node_state_changed(self, entity, attribute, old, new, kwargs):
         """Respond to a change in the Node's state."""

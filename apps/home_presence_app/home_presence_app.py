@@ -1085,6 +1085,8 @@ class HomePresenceApp(ad.ADBase):
             return
 
         if not self.node_rebooting[node].done():
+            self.adbase.log(f"Cancelling Node restart timer for {node}")
+            
             self.node_rebooting[node].cancel()
 
         self.node_rebooting[node] = None

@@ -761,7 +761,7 @@ class HomePresenceApp(ad.ADBase):
             return
 
         # Perform Arrival Scan
-        if kwargs["scan_type"] in "Arrive":
+        if kwargs["scan_type"] == "Arrive":
             self.mqtt.mqtt_publish(topic, payload)
             return
 

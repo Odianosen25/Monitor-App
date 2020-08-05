@@ -1366,7 +1366,7 @@ class HomePresenceApp(ad.ADBase):
             if self.node_rebooting[node] is not None:
                 if (
                     not self.node_rebooting[node].done()
-                    and not self.node_rebooting[node].canlled()
+                    and not self.node_rebooting[node].cancelled()
                 ):
                     # this means its still running, so cancel the task
                     self.node_rebooting[node].cancel()

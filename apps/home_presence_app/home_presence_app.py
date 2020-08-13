@@ -803,6 +803,12 @@ class HomePresenceApp(ad.ADBase):
         """Respond to a gateway device opening or closing."""
         self.adbase.log(f"Gateway Sensor {entity} now {new}", level="DEBUG")
 
+        true_states = ("on", "y", "yes", "true", "home", "open", True)
+        false_states = ("off", "n", "no", "false", "away", "closed", False)
+
+        if new not in (true_states + false_states):
+            return
+
         if self.gateway_timer is not None:
             # Cancel Existing Timer
             self.adbase.cancel_timer(self.gateway_timer)

@@ -66,7 +66,7 @@ class HomePresenceApp(ad.ADBase):
         self.home_state_entities = dict()
         self.system_handle = dict()
         self.node_scheduled_reboot = dict()
-        self.node_rebooting = dict()
+        self.node_executing = dict()
 
         # Create a sensor to keep track of if the monitor is busy or not.
         self.monitor_entity = f"{self.presence_name}.monitor_state"
@@ -803,8 +803,8 @@ class HomePresenceApp(ad.ADBase):
         """Respond to a gateway device opening or closing."""
         self.adbase.log(f"Gateway Sensor {entity} now {new}", level="DEBUG")
 
-        true_states = ("on", "y", "yes", "true", "home", "open", True)
-        false_states = ("off", "n", "no", "false", "away", "closed", False)
+        true_states = ("on", "y", "yes", "true", "home", "open", "unlocked", True)
+        false_states = ("off", "n", "no", "false", "away", "closed", "locked", False)
 
         if new not in (true_states + false_states):
             return
@@ -1025,13 +1025,13 @@ class HomePresenceApp(ad.ADBase):
                     # use executor here, as sometimes due to being unable to process it
                     # as the node might be busy, could lead to AD hanging
 
-                    node_task = self.node_rebooting.get(node)
+                    node_task = self.node_executing.get(node)
                     if node_task is None or (
                         node_task is not None
                         and (node_task.done() or node_task.cancelled())
                     ):
                         # meaning its either not running, or had completed or cancelled
-                        self.node_rebooting[node] = self.AD.executor.submit(
+                        self.node_executing[node] = self.AD.executor.submit(
                             self.restart_hardware,
                             node,
                             host,
@@ -1051,6 +1051,34 @@ class HomePresenceApp(ad.ADBase):
                     self.adbase.error(
                         f"Could not restart {node}, due to {e}", level="ERROR"
                     )
+    
+    def run_node_command(self, kwargs):
+        """Execute Command to be ran on the Node."""
+
+        node = kwargs.get("node")
+        location = kwargs.get("location")
+        command = kwargs.get("command")
+
+        assert command is not None, ("Command must be provided")
+
+        # first get the required nodes
+
+        if location is not None:
+            node = location.lower().replace(" ", "_")
+
+        elif node is not None:
+            node = node.lower().replace(" ", "_")
+
+        nodes = []
+        
+        if node == "all":
+            nodes = list(self.args.get("remote_monitors", {}).keys())
+        
+        else:
+            nodes = [node]
+        
+        # now execute the command
+
 
     def restart_hardware(self, node, host, username, password, cmd):
         """Used to Restart the Hardware Monitor running in"""
@@ -1087,15 +1115,15 @@ class HomePresenceApp(ad.ADBase):
 
         node = kwargs["node"]
 
-        if self.node_rebooting.get(node) is None:
+        if self.node_executing.get(node) is None:
             return
 
-        if not self.node_rebooting[node].done():
+        if not self.node_executing[node].done():
             self.adbase.log(f"Cancelling Node restart timer for {node}")
             
-            self.node_rebooting[node].cancel()
+            self.node_executing[node].cancel()
 
-        self.node_rebooting[node] = None
+        self.node_executing[node] = None
 
     def clear_location_entities(self, kwargs):
         """Clear sensors from an offline location.
@@ -1323,6 +1351,9 @@ class HomePresenceApp(ad.ADBase):
             f"{self.presence_name}/run_rssi_scan", self.presense_services
         )
         self.mqtt.register_service(
+            f"{self.presence_name}/run_node_command", self.presense_services
+        )
+        self.mqtt.register_service(
             f"{self.presence_name}/restart_device", self.presense_services
         )
         self.mqtt.register_service(
@@ -1370,11 +1401,11 @@ class HomePresenceApp(ad.ADBase):
         self.adbase.run_in(func, 0, **kwargs)
 
     def terminate(self):
-        for node in self.node_rebooting:
-            if self.node_rebooting[node] is not None:
+        for node in self.node_executing:
+            if self.node_executing[node] is not None:
                 if (
-                    not self.node_rebooting[node].done()
-                    and not self.node_rebooting[node].cancelled()
+                    not self.node_executing[node].done()
+                    and not self.node_executing[node].cancelled()
                 ):
                     # this means its still running, so cancel the task
-                    self.node_rebooting[node].cancel()
+                    self.node_executing[node].cancel()

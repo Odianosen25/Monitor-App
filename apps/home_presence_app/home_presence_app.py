@@ -667,7 +667,9 @@ class HomePresenceApp(ad.ADBase):
             self.mqtt.set_state(device_state_sensor, state=self.state_true)
             self.update_hass_sensor(device_state_sensor, self.state_true)
 
-            self.update_hass_sensor(self.somebody_is_home, "on")
+            # now check how many ppl are home
+            count = self.count_persons_in_home()
+            self.update_hass_sensor(self.somebody_is_home, "on", new_attr={"count" : count})
 
             if device_state_sensor in self.all_users_sensors:
                 self.update_hass_sensor(self.everyone_not_home, "off")
@@ -862,8 +864,10 @@ class HomePresenceApp(ad.ADBase):
             # Someone is not home, see if anyone is still home.
             self.update_hass_sensor(self.everyone_not_home, "on")
             somebody_home = "off"
-
-        self.update_hass_sensor(self.somebody_is_home, somebody_home)
+        
+        count = self.count_persons_in_home()
+        new_attr = {"count" : count}
+        self.update_hass_sensor(self.somebody_is_home, somebody_home, new_attr=new_attr)
 
     def reload_device_state(self, kwargs):
         """Get the latest states from the scanners."""
@@ -1000,7 +1004,7 @@ class HomePresenceApp(ad.ADBase):
 
                 if node not in self.args["remote_monitors"]:
                     self.adbase.log(
-                        f"Location's node {node} not defined. So cannot reboot it",
+                        f"Node {node} not defined. So cannot reboot it",
                         level="WARNING",
                     )
 
@@ -1014,37 +1018,20 @@ class HomePresenceApp(ad.ADBase):
                     self.node_scheduled_reboot[node] = None
                     self.mqtt.set_state(entity_id, reboot_scheduled="off")
 
-                setting = self.args["remote_monitors"][node]
-
                 try:
-                    host = setting["host"]
-                    username = setting["username"]
-                    password = setting["password"]
-                    reboot_command = setting.get("reboot_command", "sudo reboot now")
-
                     # use executor here, as sometimes due to being unable to process it
                     # as the node might be busy, could lead to AD hanging
 
                     node_task = self.node_executing.get(node)
-                    if node_task is None or (
-                        node_task is not None
-                        and (node_task.done() or node_task.cancelled())
-                    ):
+                    if node_task is None or node_task.done() or node_task.cancelled():
                         # meaning its either not running, or had completed or cancelled
                         self.node_executing[node] = self.AD.executor.submit(
-                            self.restart_hardware,
-                            node,
-                            host,
-                            username,
-                            password,
-                            reboot_command,
-                        )
-
-                        # run timer used to cancel the restart device task in case it hangs
-                        self.adbase.run_in(
-                            self.restart_device_cancel_timer,
-                            self.system_timeout,
-                            node=node,
+                            self.restart_hardware, node)
+                    
+                    else:
+                        self.adbase.log(
+                            f"{location}'s node busy executing a command. So cannot execute this now",
+                            level="WARNING",
                         )
 
                 except Exception as e:
@@ -1055,46 +1042,65 @@ class HomePresenceApp(ad.ADBase):
     def run_node_command(self, kwargs):
         """Execute Command to be ran on the Node."""
 
-        node = kwargs.get("node")
         location = kwargs.get("location")
-        command = kwargs.get("command")
+        cmd = kwargs.get("cmd")
 
-        assert command is not None, ("Command must be provided")
+        assert cmd is not None, ("Command must be provided")
 
         # first get the required nodes
 
-        if location is not None:
+        if isinstance(location, str):
             node = location.lower().replace(" ", "_")
-
-        elif node is not None:
-            node = node.lower().replace(" ", "_")
-
-        nodes = []
+        
+        else:
+            node = location
         
         if node == "all":
             nodes = list(self.args.get("remote_monitors", {}).keys())
+        
+        elif isinstance(node, list):
+            nodes = location
         
         else:
             nodes = [node]
         
         # now execute the command
+        for node in nodes:
+            if node not in self.args["remote_monitors"]:
+                self.adbase.log(
+                    f"Node {node} not defined. So cannot reboot it",
+                    level="WARNING",
+                )
 
+                continue
 
-    def restart_hardware(self, node, host, username, password, cmd):
+            node_task = self.node_executing.get(node)
+            if node_task is None or node_task.done() or node_task.cancelled():
+                # meaning its either not running, or had completed or cancelled
+                self.node_executing[node] = self.AD.executor.submit(
+                    self.execute_command, node, cmd)
+
+            else:
+                self.adbase.log(
+                    f"{location}'s node busy executing a command. So cannot execute this now",
+                    level="WARNING",
+                )
+
+    def restart_hardware(self, node):
         """Used to Restart the Hardware Monitor running in"""
-        self.adbase.log(f"Restarting {node}'s Hardware")
-        location = node.replace("_", " ").title()
-        import paramiko
 
+        self.adbase.log(f"Restarting {node}'s Hardware")
+
+        reboot_command = "sudo reboot now"
+
+        if "reboot_command" in self.args["remote_monitors"][node]:
+            reboot_command = self.args["remote_monitors"][node]["reboot_command"]
+
+        location = node.replace("_", " ").title()
         try:
-            ssh = paramiko.SSHClient()
-            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            ssh.connect(host, username=username, password=password)
-            stdin, stdout, stderr = ssh.exec_command(cmd)
-            completed = stdout.readlines()
-            ssh.close()
+            result = self.execute_command(node, reboot_command)
             self.adbase.log(
-                f"{node}'s Hardware reset completed with result {completed}",
+                f"{node}'s Hardware reset completed with result {result}",
                 level="DEBUG",
             )
 
@@ -1109,21 +1115,35 @@ class HomePresenceApp(ad.ADBase):
             self.adbase.error(
                 f"Could not restart {location} Monitor Hardware", level="ERROR",
             )
+    
+    def execute_command(self, node, cmd):
+        """Used to Run command on a Monitor Node"""
 
-    def restart_device_cancel_timer(self, kwargs):
-        """Used to cancel the restart device task"""
+        self.adbase.log(f"Running {cmd} on {node}'s Hardware")
+        import paramiko
 
-        node = kwargs["node"]
+        # get the node's credentials
 
-        if self.node_executing.get(node) is None:
-            return
+        if node not in self.args["remote_monitors"]:
+            raise ValueError (f"Given Node {node}, has no specified credentials")
 
-        if not self.node_executing[node].done():
-            self.adbase.log(f"Cancelling Node restart timer for {node}")
-            
-            self.node_executing[node].cancel()
+        setting = self.args["remote_monitors"][node]
+        host = setting["host"]
+        username = setting["username"]
+        password = setting["password"]
 
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh.connect(host, username=username, password=password, timeout=float(self.system_timeout))
+        stdin, stdout, stderr = ssh.exec_command(cmd)
+        completed = stdout.readlines()
+        ssh.close()
+
+        self.adbase.log(completed, level="DEBUG")
+
+        # reset node task if completed
         self.node_executing[node] = None
+        return completed
 
     def clear_location_entities(self, kwargs):
         """Clear sensors from an offline location.
@@ -1329,6 +1349,17 @@ class HomePresenceApp(ad.ADBase):
 
             # now remove for AD
             self.mqtt.remove_entity(device_state_sensor)
+    
+    def count_persons_in_home(self):
+        """Used to count the number of persons in the Home"""
+
+        user_devices = list(self.home_state_entities.keys())
+        sensors = list(
+            map(lambda x: self.mqtt.get_state(f"{self.user_device_domain}.{x}", copy=False), user_devices)
+        )
+        sensors = [i for i in sensors if i == self.state_true]
+
+        return len(sensors)
 
     def hass_restarted(self, event_name, data, kwargs):
         """Respond to a HASS Restart."""

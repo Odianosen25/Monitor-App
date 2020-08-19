@@ -104,6 +104,7 @@ class HomePresenceApp(ad.ADBase):
         # Initialize our timer variables
         self.gateway_timer = None
         self.motion_timer = None
+        self.check_home_timer = None
 
         # Setup home gateway sensors
         if self.args.get("home_gateway_sensors") is not None:
@@ -632,8 +633,8 @@ class HomePresenceApp(ad.ADBase):
 
             self.adbase.run_in(self.run_arrive_scan, 0)
             return
-        
-        if int(new) == 0: # the confidence is 0, so rssi should be lower
+
+        if int(new) == 0:  # the confidence is 0, so rssi should be lower
             # unknown used just to ensure it doesn't clash with an active node
             appdaemon_conf_sensor = self.hass_conf_sensor_to_appdaemon_conf(entity)
             self.mqtt.set_state(appdaemon_conf_sensor, rssi="unknown")
@@ -669,11 +670,18 @@ class HomePresenceApp(ad.ADBase):
 
             # now check how many ppl are home
             count = self.count_persons_in_home()
-            self.update_hass_sensor(self.somebody_is_home, "on", new_attr={"count" : count})
+            self.update_hass_sensor(
+                self.somebody_is_home, "on", new_attr={"count": count}
+            )
 
             if device_state_sensor in self.all_users_sensors:
                 self.update_hass_sensor(self.everyone_not_home, "off")
-                self.adbase.run_in(self.check_home_state, 2, check_state="is_home")
+                if self.check_home_timer is not None:
+                    self.adbase.cancel_timer(self.check_home_timer)
+
+                self.check_home_timer = self.adbase.run_in(
+                    self.check_home_state, 2, check_state="is_home"
+                )
             return
 
         if (
@@ -737,7 +745,13 @@ class HomePresenceApp(ad.ADBase):
             if device_state_sensor in self.all_users_sensors:
                 # At least someone not home, set Everyone Home to off
                 self.update_hass_sensor(self.everyone_home, "off")
-                self.adbase.run_in(self.check_home_state, 2, check_state="not_home")
+
+                if self.check_home_timer is not None:
+                    self.adbase.cancel_timer(self.check_home_timer)
+
+                self.check_home_timer = self.adbase.run_in(
+                    self.check_home_state, 2, check_state="not_home"
+                )
 
         self.not_home_timers[device_entity_id] = None
 
@@ -864,10 +878,11 @@ class HomePresenceApp(ad.ADBase):
             # Someone is not home, see if anyone is still home.
             self.update_hass_sensor(self.everyone_not_home, "on")
             somebody_home = "off"
-        
+
         count = self.count_persons_in_home()
-        new_attr = {"count" : count}
+        new_attr = {"count": count}
         self.update_hass_sensor(self.somebody_is_home, somebody_home, new_attr=new_attr)
+        self.check_home_timer = None
 
     def reload_device_state(self, kwargs):
         """Get the latest states from the scanners."""
@@ -1026,8 +1041,9 @@ class HomePresenceApp(ad.ADBase):
                     if node_task is None or node_task.done() or node_task.cancelled():
                         # meaning its either not running, or had completed or cancelled
                         self.node_executing[node] = self.AD.executor.submit(
-                            self.restart_hardware, node)
-                    
+                            self.restart_hardware, node
+                        )
+
                     else:
                         self.adbase.log(
                             f"{location}'s node busy executing a command. So cannot execute this now",
@@ -1038,38 +1054,37 @@ class HomePresenceApp(ad.ADBase):
                     self.adbase.error(
                         f"Could not restart {node}, due to {e}", level="ERROR"
                     )
-    
+
     def run_node_command(self, kwargs):
         """Execute Command to be ran on the Node."""
 
         location = kwargs.get("location")
         cmd = kwargs.get("cmd")
 
-        assert cmd is not None, ("Command must be provided")
+        assert cmd is not None, "Command must be provided"
 
         # first get the required nodes
 
         if isinstance(location, str):
             node = location.lower().replace(" ", "_")
-        
+
         else:
             node = location
-        
+
         if node == "all":
             nodes = list(self.args.get("remote_monitors", {}).keys())
-        
+
         elif isinstance(node, list):
             nodes = location
-        
+
         else:
             nodes = [node]
-        
+
         # now execute the command
         for node in nodes:
             if node not in self.args["remote_monitors"]:
                 self.adbase.log(
-                    f"Node {node} not defined. So cannot reboot it",
-                    level="WARNING",
+                    f"Node {node} not defined. So cannot reboot it", level="WARNING",
                 )
 
                 continue
@@ -1078,7 +1093,8 @@ class HomePresenceApp(ad.ADBase):
             if node_task is None or node_task.done() or node_task.cancelled():
                 # meaning its either not running, or had completed or cancelled
                 self.node_executing[node] = self.AD.executor.submit(
-                    self.execute_command, node, cmd)
+                    self.execute_command, node, cmd
+                )
 
             else:
                 self.adbase.log(
@@ -1115,7 +1131,7 @@ class HomePresenceApp(ad.ADBase):
             self.adbase.error(
                 f"Could not restart {location} Monitor Hardware", level="ERROR",
             )
-    
+
     def execute_command(self, node, cmd):
         """Used to Run command on a Monitor Node"""
 
@@ -1125,7 +1141,7 @@ class HomePresenceApp(ad.ADBase):
         # get the node's credentials
 
         if node not in self.args["remote_monitors"]:
-            raise ValueError (f"Given Node {node}, has no specified credentials")
+            raise ValueError(f"Given Node {node}, has no specified credentials")
 
         setting = self.args["remote_monitors"][node]
         host = setting["host"]
@@ -1134,7 +1150,12 @@ class HomePresenceApp(ad.ADBase):
 
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh.connect(host, username=username, password=password, timeout=float(self.system_timeout))
+        ssh.connect(
+            host,
+            username=username,
+            password=password,
+            timeout=float(self.system_timeout),
+        )
         stdin, stdout, stderr = ssh.exec_command(cmd)
         completed = stdout.readlines()
         ssh.close()
@@ -1162,7 +1183,9 @@ class HomePresenceApp(ad.ADBase):
             for sensor in entity_list:
                 if location in sensor:  # that sensor belongs to that location
                     self.update_hass_sensor(sensor, 0)
-                    appdaemon_conf_sensor = self.hass_conf_sensor_to_appdaemon_conf(sensor)
+                    appdaemon_conf_sensor = self.hass_conf_sensor_to_appdaemon_conf(
+                        sensor
+                    )
                     # set to "unknown" since it had been cleared
                     self.mqtt.set_state(appdaemon_conf_sensor, state=0, rssi="unknown")
                     self.update_hass_sensor(sensor, new_attr={"rssi": "unknown"})
@@ -1174,7 +1197,7 @@ class HomePresenceApp(ad.ADBase):
         self.mqtt.set_state(entity_id, state="offline")
 
         self.handle_nodes_state(location, "offline")
-    
+
     def hass_conf_sensor_to_appdaemon_conf(self, sensor):
         """used to convert HASS confidence sensor to AD's"""
 
@@ -1349,13 +1372,18 @@ class HomePresenceApp(ad.ADBase):
 
             # now remove for AD
             self.mqtt.remove_entity(device_state_sensor)
-    
+
     def count_persons_in_home(self):
         """Used to count the number of persons in the Home"""
 
         user_devices = list(self.home_state_entities.keys())
         sensors = list(
-            map(lambda x: self.mqtt.get_state(f"{self.user_device_domain}.{x}", copy=False), user_devices)
+            map(
+                lambda x: self.mqtt.get_state(
+                    f"{self.user_device_domain}.{x}", copy=False
+                ),
+                user_devices,
+            )
         )
         sensors = [i for i in sensors if i == self.state_true]
 

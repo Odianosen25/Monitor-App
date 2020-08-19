@@ -44,10 +44,16 @@ class HomePresenceApp(ad.ADBase):
             "off" if self.user_device_domain == "binary_sensor" else "not_home"
         )
 
-        # Setup dictionary of known beacons in the format { name: mac_id }.
+        # Setup dictionary of known beacons in the format { mac_id: name }.
         self.known_beacons = {
             p[0]: p[1].lower()
             for p in (b.split(" ", 1) for b in self.args.get("known_beacons", []))
+        }
+
+        # Setup dictionary of known devices in the format { mac_id: name }.
+        self.known_devices = {
+            p[0]: p[1].lower()
+            for p in (b.split(" ", 1) for b in self.args.get("known_devices", []))
         }
 
         # Support nested presence topics (e.g. "hass/monitor")
@@ -182,6 +188,7 @@ class HomePresenceApp(ad.ADBase):
         # Load the devices from the config.
         self.adbase.run_in(self.reload_device_state, 5)
         self.adbase.run_in(self.load_known_devices, 0)
+        self.adbase.run_in(self.clean_devices, 60)  # clean devices later
         self.setup_service()  # setup service
 
     def setup_global_sensors(self):
@@ -1332,7 +1339,11 @@ class HomePresenceApp(ad.ADBase):
 
     def remove_known_device(self, kwargs):
         """Request all known devices in config to be deleted from monitors."""
+
         device = kwargs["device"]
+
+        self.adbase.log(f"Removing device {device}", level="INFO")
+
         self.adbase.run_in(
             self.send_mqtt_message,
             0,
@@ -1345,7 +1356,11 @@ class HomePresenceApp(ad.ADBase):
         device_name = None
         for entity in self.mqtt.get_state(f"{self.presence_name}"):
             if device == self.mqtt.get_state(entity, attribute="id"):
+                self.adbase.log(entity)
                 location = self.mqtt.get_state(entity, attribute="location")
+                if location is None:
+                    continue
+
                 node = location.replace(" ", "_").lower()
                 self.mqtt.remove_entity(entity)
                 if device_name is None:
@@ -1372,6 +1387,25 @@ class HomePresenceApp(ad.ADBase):
 
             # now remove for AD
             self.mqtt.remove_entity(device_state_sensor)
+
+    def clean_devices(self, kwargs):
+        """Used to check for old devices, and remove them accordingly"""
+
+        self.adbase.log("Cleaning out old Known Devices")
+
+        # search for them first
+        delay = 0
+        removed = []
+        for sensor in self.mqtt.get_state(self.presence_topic, copy=False, default={}):
+            mac_id = self.mqtt.get_state(sensor, attribute="id", copy=False)
+            if mac_id is None:
+                continue
+
+            if mac_id not in removed and mac_id not in self.known_devices:
+                # it should be removed
+                self.adbase.run_in(self.remove_known_device, delay, device=mac_id)
+                removed.append(mac_id)  # indicate it has been removed
+                delay += 3  # should process later
 
     def count_persons_in_home(self):
         """Used to count the number of persons in the Home"""
@@ -1423,6 +1457,9 @@ class HomePresenceApp(ad.ADBase):
         )
         self.mqtt.register_service(
             f"{self.presence_name}/clear_location_entities", self.presense_services
+        )
+        self.mqtt.register_service(
+            f"{self.presence_name}/clean_devices", self.presense_services
         )
 
     def presense_services(self, namespace, domain, service, kwargs):

@@ -186,9 +186,9 @@ class HomePresenceApp(ad.ADBase):
         self.hass.listen_event(self.hass_restarted, "plugin_restarted")
 
         # Load the devices from the config.
-        self.adbase.run_in(self.reload_device_state, 5)
+        self.adbase.run_in(self.clean_devices, 0)  # clean old devices first
+        self.adbase.run_in(self.reload_device_state, 10)
         self.adbase.run_in(self.load_known_devices, 0)
-        self.adbase.run_in(self.clean_devices, 60)  # clean devices later
         self.setup_service()  # setup service
 
     def setup_global_sensors(self):

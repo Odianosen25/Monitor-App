@@ -188,7 +188,7 @@ class HomePresenceApp(ad.ADBase):
         # Load the devices from the config.
         self.adbase.run_in(self.clean_devices, 0)  # clean old devices first
         self.adbase.run_in(self.reload_device_state, 10)
-        self.adbase.run_in(self.load_known_devices, 0)
+        self.adbase.run_in(self.load_known_devices, 15)
         self.setup_service()  # setup service
 
     def setup_global_sensors(self):

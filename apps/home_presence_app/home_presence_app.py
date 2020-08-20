@@ -69,6 +69,7 @@ class HomePresenceApp(ad.ADBase):
         self.all_users_sensors = []
         self.not_home_timers = dict()
         self.location_timers = dict()
+        self.confidence_handlers = dict()
         self.home_state_entities = dict()
         self.system_handle = dict()
         self.node_scheduled_reboot = dict()
@@ -187,8 +188,6 @@ class HomePresenceApp(ad.ADBase):
 
         # Load the devices from the config.
         self.adbase.run_in(self.clean_devices, 0)  # clean old devices first
-        self.adbase.run_in(self.reload_device_state, 10)
-        self.adbase.run_in(self.load_known_devices, 15)
         self.setup_service()  # setup service
 
     def setup_global_sensors(self):
@@ -414,7 +413,7 @@ class HomePresenceApp(ad.ADBase):
         # Add listeners to the conf sensors to update the main state sensor on change.
         if device_conf_sensor not in self.home_state_entities[device_entity_id]:
             self.home_state_entities[device_entity_id].append(device_conf_sensor)
-            self.hass.listen_state(
+            self.confidence_handlers[device_conf_sensor] = self.hass.listen_state(
                 self.confidence_updated,
                 device_conf_sensor,
                 device_entity_id=device_entity_id,
@@ -1335,7 +1334,7 @@ class HomePresenceApp(ad.ADBase):
                     payload=device,
                     scan_type="System",
                 )
-                timer += 15
+                timer += 1
 
     def remove_known_device(self, kwargs):
         """Request all known devices in config to be deleted from monitors."""
@@ -1353,10 +1352,12 @@ class HomePresenceApp(ad.ADBase):
         )
 
         # now remove the device from AD
+        entities = list(
+            self.mqtt.get_state(f"{self.presence_name}", copy=False, default={}).keys()
+        )
         device_name = None
-        for entity in self.mqtt.get_state(f"{self.presence_name}"):
-            if device == self.mqtt.get_state(entity, attribute="id"):
-                self.adbase.log(entity)
+        for entity in entities:
+            if device == self.mqtt.get_state(entity, attribute="id", copy=False):
                 location = self.mqtt.get_state(entity, attribute="location")
                 if location is None:
                     continue
@@ -1368,8 +1369,14 @@ class HomePresenceApp(ad.ADBase):
                     device_name = domain_device.replace(f"_{node}", "")
 
         # now remove the device from HA
-        for entity in self.hass.get_state("sensor"):
-            if device == self.hass.get_state(entity, attribute="id"):
+        entities = list(self.hass.get_state("sensor", copy=False, default={}).keys())
+        for entity in entities:
+            if device == self.hass.get_state(entity, attribute="id", copy=False):
+                # first cancel the handler if it exists
+                handler = self.confidence_handlers.get(entity)
+                if handler is not None:
+                    self.hass.cancel_listen_state(handler)
+
                 self.hass.remove_entity(entity)
 
         if device_name is not None:
@@ -1391,21 +1398,51 @@ class HomePresenceApp(ad.ADBase):
     def clean_devices(self, kwargs):
         """Used to check for old devices, and remove them accordingly"""
 
-        self.adbase.log("Cleaning out old Known Devices")
-
         # search for them first
         delay = 0
         removed = []
+        known_device_names = [n.lower() for n in list(self.known_devices.values())]
+
         for sensor in self.mqtt.get_state(self.presence_topic, copy=False, default={}):
             mac_id = self.mqtt.get_state(sensor, attribute="id", copy=False)
             if mac_id is None:
                 continue
 
-            if mac_id not in removed and mac_id not in self.known_devices:
+            sensor_name = self.mqtt.get_state(
+                sensor, attribute="name", copy=False, default=""
+            ).lower()
+            if mac_id not in removed and (
+                mac_id not in self.known_devices
+                or sensor_name not in known_device_names
+            ):
                 # it should be removed
+
+                if removed == []:  # means haven't removed one yet
+                    self.adbase.log("Cleaning out old Known Devices")
+
                 self.adbase.run_in(self.remove_known_device, delay, device=mac_id)
                 removed.append(mac_id)  # indicate it has been removed
                 delay += 3  # should process later
+
+        if removed != []:
+            delay += 5
+            # means some where removed, so needs to re-load the scripts to clean properly
+            self.adbase.run_in(self.restart_device, delay)
+
+        # now load up the known devices before state
+        delay += 45
+        self.adbase.run_in(self.load_known_devices, delay)
+
+        if removed != []:
+            delay += 15 + len(known_device_names)
+            self.adbase.run_in(self.run_arrive_scan, delay)
+            self.adbase.run_in(self.load_known_devices, delay + 120)
+
+        delay += 60
+        self.adbase.run_in(self.reload_device_state, delay)
+
+        # for some strange reasons, forces the app to run load_known_devices twice
+        # to get updated data on the cleaned out devices
 
     def count_persons_in_home(self):
         """Used to count the number of persons in the Home"""

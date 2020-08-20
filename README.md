@@ -22,7 +22,7 @@ This App is designed to maximise the use of the detection system, so that the us
 - Before sending the scan instruction, it first checks for if the system is busy scanning. With the new upgrade to monitor by Andrew, this is not really needed. But (though preferred) if the user was to activate `PREF_MQTT_REPORT_SCAN_MESSAGES` to `true` in preferences, it can still use it
 - If no gateway sensors are specified, it will send scan instructions every 1 minute. This negates the experience for quick detection, so it is highly recommended to make use of at least a single gateway sensor.
 - Ability to define the `known_devices` in a single place within AD, which is then loaded to all monitor nodes on the network. This can be useful, if having multiple nodes, and need to manage all `known_devices` from a single place, instead of having to change it in all nodes individually.
-- Cleans out old ``known_devices`` from the nodes, when they have been deleted from the ``known_devices`` setting
+- Cleans out old ``known_devices`` from the nodes, when they have been deleted from the ``known_devices`` setting. Do note this takes about 2 minutes after app initialialies to  complete
 - Generates entities within AD, which has all the data published by the node per device, and can be listened to in other Apps for other automation reasons. For example `rssi` readings based on devices.
 - Constantly checks for all installed monitor nodes on the network, to ensure which is online. If any location doesn't respond after a set time `system_timeout`, it sets all entities generated from that location to `0`. This is very useful if for example, a node reported a device confidence of `100`, then it went down. The device will stay at `100` even if the user had left the house, which will lead to wrong state.
 - Reporting of the state of the entire monitor system, including all nodes state to a MQTT topic. The topic is `monitor/state`
@@ -248,6 +248,13 @@ Used to instruct the app to set all entities in a predefined location to 0, indi
 
 ```python
 self.call_service("monitor/clear_location_entities", location="hallway", namespace=mqtt)
+```
+
+### clean_devices
+Used to instruct the app to clean up old known devices. This is always ran at start-up, so technically should not be a need to be manually ran
+
+```python
+self.call_service("monitor/clean_devices", namespace=mqtt)
 ```
 
 MQTT Commands:

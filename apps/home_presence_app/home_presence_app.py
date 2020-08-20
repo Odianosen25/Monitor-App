@@ -23,7 +23,7 @@ from datetime import datetime, timedelta
 import traceback
 
 
-__VERSION__ = "2.3.3"
+__VERSION__ = "2.3.4"
 
 # pylint: disable=attribute-defined-outside-init,unused-argument
 class HomePresenceApp(ad.ADBase):
@@ -44,10 +44,16 @@ class HomePresenceApp(ad.ADBase):
             "off" if self.user_device_domain == "binary_sensor" else "not_home"
         )
 
-        # Setup dictionary of known beacons in the format { name: mac_id }.
+        # Setup dictionary of known beacons in the format { mac_id: name }.
         self.known_beacons = {
             p[0]: p[1].lower()
             for p in (b.split(" ", 1) for b in self.args.get("known_beacons", []))
+        }
+
+        # Setup dictionary of known devices in the format { mac_id: name }.
+        self.known_devices = {
+            p[0]: p[1].lower()
+            for p in (b.split(" ", 1) for b in self.args.get("known_devices", []))
         }
 
         # Support nested presence topics (e.g. "hass/monitor")
@@ -63,10 +69,11 @@ class HomePresenceApp(ad.ADBase):
         self.all_users_sensors = []
         self.not_home_timers = dict()
         self.location_timers = dict()
+        self.confidence_handlers = dict()
         self.home_state_entities = dict()
         self.system_handle = dict()
         self.node_scheduled_reboot = dict()
-        self.node_rebooting = dict()
+        self.node_executing = dict()
 
         # Create a sensor to keep track of if the monitor is busy or not.
         self.monitor_entity = f"{self.presence_name}.monitor_state"
@@ -104,6 +111,7 @@ class HomePresenceApp(ad.ADBase):
         # Initialize our timer variables
         self.gateway_timer = None
         self.motion_timer = None
+        self.check_home_timer = None
 
         # Setup home gateway sensors
         if self.args.get("home_gateway_sensors") is not None:
@@ -179,8 +187,7 @@ class HomePresenceApp(ad.ADBase):
         self.hass.listen_event(self.hass_restarted, "plugin_restarted")
 
         # Load the devices from the config.
-        self.adbase.run_in(self.reload_device_state, 5)
-        self.adbase.run_in(self.load_known_devices, 0)
+        self.adbase.run_in(self.clean_devices, 0)  # clean old devices first
         self.setup_service()  # setup service
 
     def setup_global_sensors(self):
@@ -406,7 +413,7 @@ class HomePresenceApp(ad.ADBase):
         # Add listeners to the conf sensors to update the main state sensor on change.
         if device_conf_sensor not in self.home_state_entities[device_entity_id]:
             self.home_state_entities[device_entity_id].append(device_conf_sensor)
-            self.hass.listen_state(
+            self.confidence_handlers[device_conf_sensor] = self.hass.listen_state(
                 self.confidence_updated,
                 device_conf_sensor,
                 device_entity_id=device_entity_id,
@@ -633,6 +640,12 @@ class HomePresenceApp(ad.ADBase):
             self.adbase.run_in(self.run_arrive_scan, 0)
             return
 
+        if int(new) == 0:  # the confidence is 0, so rssi should be lower
+            # unknown used just to ensure it doesn't clash with an active node
+            appdaemon_conf_sensor = self.hass_conf_sensor_to_appdaemon_conf(entity)
+            self.mqtt.set_state(appdaemon_conf_sensor, rssi="unknown")
+            self.update_hass_sensor(entity, new_attr={"rssi": "unknown"})
+
         sensor_res = list(
             map(lambda x: self.hass.get_state(x, copy=False), device_conf_sensors)
         )
@@ -661,11 +674,20 @@ class HomePresenceApp(ad.ADBase):
             self.mqtt.set_state(device_state_sensor, state=self.state_true)
             self.update_hass_sensor(device_state_sensor, self.state_true)
 
-            self.update_hass_sensor(self.somebody_is_home, "on")
+            # now check how many ppl are home
+            count = self.count_persons_in_home()
+            self.update_hass_sensor(
+                self.somebody_is_home, "on", new_attr={"count": count}
+            )
 
             if device_state_sensor in self.all_users_sensors:
                 self.update_hass_sensor(self.everyone_not_home, "off")
-                self.adbase.run_in(self.check_home_state, 2, check_state="is_home")
+                if self.check_home_timer is not None:
+                    self.adbase.cancel_timer(self.check_home_timer)
+
+                self.check_home_timer = self.adbase.run_in(
+                    self.check_home_state, 2, check_state="is_home"
+                )
             return
 
         if (
@@ -729,7 +751,13 @@ class HomePresenceApp(ad.ADBase):
             if device_state_sensor in self.all_users_sensors:
                 # At least someone not home, set Everyone Home to off
                 self.update_hass_sensor(self.everyone_home, "off")
-                self.adbase.run_in(self.check_home_state, 2, check_state="not_home")
+
+                if self.check_home_timer is not None:
+                    self.adbase.cancel_timer(self.check_home_timer)
+
+                self.check_home_timer = self.adbase.run_in(
+                    self.check_home_state, 2, check_state="not_home"
+                )
 
         self.not_home_timers[device_entity_id] = None
 
@@ -755,7 +783,7 @@ class HomePresenceApp(ad.ADBase):
             return
 
         # Perform Arrival Scan
-        if kwargs["scan_type"] in "Arrive":
+        if kwargs["scan_type"] == "Arrive":
             self.mqtt.mqtt_publish(topic, payload)
             return
 
@@ -796,6 +824,12 @@ class HomePresenceApp(ad.ADBase):
     def gateway_opened(self, entity, attribute, old, new, kwargs):
         """Respond to a gateway device opening or closing."""
         self.adbase.log(f"Gateway Sensor {entity} now {new}", level="DEBUG")
+
+        true_states = ("on", "y", "yes", "true", "home", "open", "unlocked", True)
+        false_states = ("off", "n", "no", "false", "away", "closed", "locked", False)
+
+        if new not in (true_states + false_states):
+            return
 
         if self.gateway_timer is not None:
             # Cancel Existing Timer
@@ -851,7 +885,10 @@ class HomePresenceApp(ad.ADBase):
             self.update_hass_sensor(self.everyone_not_home, "on")
             somebody_home = "off"
 
-        self.update_hass_sensor(self.somebody_is_home, somebody_home)
+        count = self.count_persons_in_home()
+        new_attr = {"count": count}
+        self.update_hass_sensor(self.somebody_is_home, somebody_home, new_attr=new_attr)
+        self.check_home_timer = None
 
     def reload_device_state(self, kwargs):
         """Get the latest states from the scanners."""
@@ -988,7 +1025,7 @@ class HomePresenceApp(ad.ADBase):
 
                 if node not in self.args["remote_monitors"]:
                     self.adbase.log(
-                        f"Location's node {node} not defined. So cannot reboot it",
+                        f"Node {node} not defined. So cannot reboot it",
                         level="WARNING",
                     )
 
@@ -1002,37 +1039,21 @@ class HomePresenceApp(ad.ADBase):
                     self.node_scheduled_reboot[node] = None
                     self.mqtt.set_state(entity_id, reboot_scheduled="off")
 
-                setting = self.args["remote_monitors"][node]
-
                 try:
-                    host = setting["host"]
-                    username = setting["username"]
-                    password = setting["password"]
-                    reboot_command = setting.get("reboot_command", "sudo reboot now")
-
                     # use executor here, as sometimes due to being unable to process it
                     # as the node might be busy, could lead to AD hanging
 
-                    node_task = self.node_rebooting.get(node)
-                    if node_task is None or (
-                        node_task is not None
-                        and (node_task.done() or node_task.cancelled())
-                    ):
+                    node_task = self.node_executing.get(node)
+                    if node_task is None or node_task.done() or node_task.cancelled():
                         # meaning its either not running, or had completed or cancelled
-                        self.node_rebooting[node] = self.AD.executor.submit(
-                            self.restart_hardware,
-                            node,
-                            host,
-                            username,
-                            password,
-                            reboot_command,
+                        self.node_executing[node] = self.AD.executor.submit(
+                            self.restart_hardware, node
                         )
 
-                        # run timer used to cancel the restart device task in case it hangs
-                        self.adbase.run_in(
-                            self.restart_device_cancel_timer,
-                            self.system_timeout,
-                            node=node,
+                    else:
+                        self.adbase.log(
+                            f"{location}'s node busy executing a command. So cannot execute this now",
+                            level="WARNING",
                         )
 
                 except Exception as e:
@@ -1040,21 +1061,68 @@ class HomePresenceApp(ad.ADBase):
                         f"Could not restart {node}, due to {e}", level="ERROR"
                     )
 
-    def restart_hardware(self, node, host, username, password, cmd):
-        """Used to Restart the Hardware Monitor running in"""
-        self.adbase.log(f"Restarting {node}'s Hardware")
-        location = node.replace("_", " ").title()
-        import paramiko
+    def run_node_command(self, kwargs):
+        """Execute Command to be ran on the Node."""
 
+        location = kwargs.get("location")
+        cmd = kwargs.get("cmd")
+
+        assert cmd is not None, "Command must be provided"
+
+        # first get the required nodes
+
+        if isinstance(location, str):
+            node = location.lower().replace(" ", "_")
+
+        else:
+            node = location
+
+        if node == "all":
+            nodes = list(self.args.get("remote_monitors", {}).keys())
+
+        elif isinstance(node, list):
+            nodes = location
+
+        else:
+            nodes = [node]
+
+        # now execute the command
+        for node in nodes:
+            if node not in self.args["remote_monitors"]:
+                self.adbase.log(
+                    f"Node {node} not defined. So cannot reboot it", level="WARNING",
+                )
+
+                continue
+
+            node_task = self.node_executing.get(node)
+            if node_task is None or node_task.done() or node_task.cancelled():
+                # meaning its either not running, or had completed or cancelled
+                self.node_executing[node] = self.AD.executor.submit(
+                    self.execute_command, node, cmd
+                )
+
+            else:
+                self.adbase.log(
+                    f"{location}'s node busy executing a command. So cannot execute this now",
+                    level="WARNING",
+                )
+
+    def restart_hardware(self, node):
+        """Used to Restart the Hardware Monitor running in"""
+
+        self.adbase.log(f"Restarting {node}'s Hardware")
+
+        reboot_command = "sudo reboot now"
+
+        if "reboot_command" in self.args["remote_monitors"][node]:
+            reboot_command = self.args["remote_monitors"][node]["reboot_command"]
+
+        location = node.replace("_", " ").title()
         try:
-            ssh = paramiko.SSHClient()
-            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            ssh.connect(host, username=username, password=password)
-            stdin, stdout, stderr = ssh.exec_command(cmd)
-            completed = stdout.readlines()
-            ssh.close()
+            result = self.execute_command(node, reboot_command)
             self.adbase.log(
-                f"{node}'s Hardware reset completed with result {completed}",
+                f"{node}'s Hardware reset completed with result {result}",
                 level="DEBUG",
             )
 
@@ -1070,18 +1138,39 @@ class HomePresenceApp(ad.ADBase):
                 f"Could not restart {location} Monitor Hardware", level="ERROR",
             )
 
-    def restart_device_cancel_timer(self, kwargs):
-        """Used to cancel the restart device task"""
+    def execute_command(self, node, cmd):
+        """Used to Run command on a Monitor Node"""
 
-        node = kwargs["node"]
+        self.adbase.log(f"Running {cmd} on {node}'s Hardware")
+        import paramiko
 
-        if self.node_rebooting.get(node) is None:
-            return
+        # get the node's credentials
 
-        if not self.node_rebooting[node].done():
-            self.node_rebooting[node].cancel()
+        if node not in self.args["remote_monitors"]:
+            raise ValueError(f"Given Node {node}, has no specified credentials")
 
-        self.node_rebooting[node] = None
+        setting = self.args["remote_monitors"][node]
+        host = setting["host"]
+        username = setting["username"]
+        password = setting["password"]
+
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh.connect(
+            host,
+            username=username,
+            password=password,
+            timeout=float(self.system_timeout),
+        )
+        stdin, stdout, stderr = ssh.exec_command(cmd)
+        completed = stdout.readlines()
+        ssh.close()
+
+        self.adbase.log(completed, level="DEBUG")
+
+        # reset node task if completed
+        self.node_executing[node] = None
+        return completed
 
     def clear_location_entities(self, kwargs):
         """Clear sensors from an offline location.
@@ -1100,13 +1189,12 @@ class HomePresenceApp(ad.ADBase):
             for sensor in entity_list:
                 if location in sensor:  # that sensor belongs to that location
                     self.update_hass_sensor(sensor, 0)
-                    device_entity_prefix = sensor.replace(
-                        f"sensor.{self.presence_name}_", ""
-                    ).replace("_conf", "")
-
-                    appdaemon_entity = f"{self.presence_name}.{device_entity_prefix}"
-                    self.mqtt.set_state(appdaemon_entity, state=0, rssi="-99")
-                    self.update_hass_sensor(sensor, new_attr={"rssi": "-99"})
+                    appdaemon_conf_sensor = self.hass_conf_sensor_to_appdaemon_conf(
+                        sensor
+                    )
+                    # set to "unknown" since it had been cleared
+                    self.mqtt.set_state(appdaemon_conf_sensor, state=0, rssi="unknown")
+                    self.update_hass_sensor(sensor, new_attr={"rssi": "unknown"})
 
         if location in self.location_timers:
             self.location_timers.pop(location)
@@ -1115,6 +1203,17 @@ class HomePresenceApp(ad.ADBase):
         self.mqtt.set_state(entity_id, state="offline")
 
         self.handle_nodes_state(location, "offline")
+
+    def hass_conf_sensor_to_appdaemon_conf(self, sensor):
+        """used to convert HASS confidence sensor to AD's"""
+
+        device_entity_prefix = sensor.replace(
+            f"sensor.{self.presence_name}_", ""
+        ).replace("_conf", "")
+
+        appdaemon_conf_sensor = f"{self.presence_name}.{device_entity_prefix}"
+
+        return appdaemon_conf_sensor
 
     def node_state_changed(self, entity, attribute, old, new, kwargs):
         """Respond to a change in the Node's state."""
@@ -1235,11 +1334,15 @@ class HomePresenceApp(ad.ADBase):
                     payload=device,
                     scan_type="System",
                 )
-                timer += 15
+                timer += 1
 
     def remove_known_device(self, kwargs):
         """Request all known devices in config to be deleted from monitors."""
+
         device = kwargs["device"]
+
+        self.adbase.log(f"Removing device {device}", level="INFO")
+
         self.adbase.run_in(
             self.send_mqtt_message,
             0,
@@ -1249,10 +1352,16 @@ class HomePresenceApp(ad.ADBase):
         )
 
         # now remove the device from AD
+        entities = list(
+            self.mqtt.get_state(f"{self.presence_name}", copy=False, default={}).keys()
+        )
         device_name = None
-        for entity in self.mqtt.get_state(f"{self.presence_name}"):
-            if device == self.mqtt.get_state(entity, attribute="id"):
+        for entity in entities:
+            if device == self.mqtt.get_state(entity, attribute="id", copy=False):
                 location = self.mqtt.get_state(entity, attribute="location")
+                if location is None:
+                    continue
+
                 node = location.replace(" ", "_").lower()
                 self.mqtt.remove_entity(entity)
                 if device_name is None:
@@ -1260,8 +1369,14 @@ class HomePresenceApp(ad.ADBase):
                     device_name = domain_device.replace(f"_{node}", "")
 
         # now remove the device from HA
-        for entity in self.hass.get_state("sensor"):
-            if device == self.hass.get_state(entity, attribute="id"):
+        entities = list(self.hass.get_state("sensor", copy=False, default={}).keys())
+        for entity in entities:
+            if device == self.hass.get_state(entity, attribute="id", copy=False):
+                # first cancel the handler if it exists
+                handler = self.confidence_handlers.get(entity)
+                if handler is not None:
+                    self.hass.cancel_listen_state(handler)
+
                 self.hass.remove_entity(entity)
 
         if device_name is not None:
@@ -1279,6 +1394,71 @@ class HomePresenceApp(ad.ADBase):
 
             # now remove for AD
             self.mqtt.remove_entity(device_state_sensor)
+
+    def clean_devices(self, kwargs):
+        """Used to check for old devices, and remove them accordingly"""
+
+        # search for them first
+        delay = 0
+        removed = []
+        known_device_names = [n.lower() for n in list(self.known_devices.values())]
+
+        for sensor in self.mqtt.get_state(self.presence_topic, copy=False, default={}):
+            mac_id = self.mqtt.get_state(sensor, attribute="id", copy=False)
+            if mac_id is None:
+                continue
+
+            sensor_name = self.mqtt.get_state(
+                sensor, attribute="name", copy=False, default=""
+            ).lower()
+            if mac_id not in removed and (
+                mac_id not in self.known_devices
+                or sensor_name not in known_device_names
+            ):
+                # it should be removed
+
+                if removed == []:  # means haven't removed one yet
+                    self.adbase.log("Cleaning out old Known Devices")
+
+                self.adbase.run_in(self.remove_known_device, delay, device=mac_id)
+                removed.append(mac_id)  # indicate it has been removed
+                delay += 3  # should process later
+
+        if removed != []:
+            delay += 5
+            # means some where removed, so needs to re-load the scripts to clean properly
+            self.adbase.run_in(self.restart_device, delay)
+
+        # now load up the known devices before state
+        delay += 45
+        self.adbase.run_in(self.load_known_devices, delay)
+
+        if removed != []:
+            delay += 15 + len(known_device_names)
+            self.adbase.run_in(self.run_arrive_scan, delay)
+            self.adbase.run_in(self.load_known_devices, delay + 120)
+
+        delay += 60
+        self.adbase.run_in(self.reload_device_state, delay)
+
+        # for some strange reasons, forces the app to run load_known_devices twice
+        # to get updated data on the cleaned out devices
+
+    def count_persons_in_home(self):
+        """Used to count the number of persons in the Home"""
+
+        user_devices = list(self.home_state_entities.keys())
+        sensors = list(
+            map(
+                lambda x: self.mqtt.get_state(
+                    f"{self.user_device_domain}.{x}", copy=False
+                ),
+                user_devices,
+            )
+        )
+        sensors = [i for i in sensors if i == self.state_true]
+
+        return len(sensors)
 
     def hass_restarted(self, event_name, data, kwargs):
         """Respond to a HASS Restart."""
@@ -1301,6 +1481,9 @@ class HomePresenceApp(ad.ADBase):
             f"{self.presence_name}/run_rssi_scan", self.presense_services
         )
         self.mqtt.register_service(
+            f"{self.presence_name}/run_node_command", self.presense_services
+        )
+        self.mqtt.register_service(
             f"{self.presence_name}/restart_device", self.presense_services
         )
         self.mqtt.register_service(
@@ -1311,6 +1494,9 @@ class HomePresenceApp(ad.ADBase):
         )
         self.mqtt.register_service(
             f"{self.presence_name}/clear_location_entities", self.presense_services
+        )
+        self.mqtt.register_service(
+            f"{self.presence_name}/clean_devices", self.presense_services
         )
 
     def presense_services(self, namespace, domain, service, kwargs):
@@ -1348,11 +1534,11 @@ class HomePresenceApp(ad.ADBase):
         self.adbase.run_in(func, 0, **kwargs)
 
     def terminate(self):
-        for node in self.node_rebooting:
-            if self.node_rebooting[node] is not None:
+        for node in self.node_executing:
+            if self.node_executing[node] is not None:
                 if (
-                    not self.node_rebooting[node].done()
-                    and not self.node_rebooting[node].canlled()
+                    not self.node_executing[node].done()
+                    and not self.node_executing[node].cancelled()
                 ):
                     # this means its still running, so cancel the task
-                    self.node_rebooting[node].cancel()
+                    self.node_executing[node].cancel()

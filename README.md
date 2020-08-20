@@ -22,6 +22,7 @@ This App is designed to maximise the use of the detection system, so that the us
 - Before sending the scan instruction, it first checks for if the system is busy scanning. With the new upgrade to monitor by Andrew, this is not really needed. But (though preferred) if the user was to activate `PREF_MQTT_REPORT_SCAN_MESSAGES` to `true` in preferences, it can still use it
 - If no gateway sensors are specified, it will send scan instructions every 1 minute. This negates the experience for quick detection, so it is highly recommended to make use of at least a single gateway sensor.
 - Ability to define the `known_devices` in a single place within AD, which is then loaded to all monitor nodes on the network. This can be useful, if having multiple nodes, and need to manage all `known_devices` from a single place, instead of having to change it in all nodes individually.
+- Cleans out old ``known_devices`` from the nodes, when they have been deleted from the ``known_devices`` setting. Do note this takes about 2 minutes after app initialialies to  complete
 - Generates entities within AD, which has all the data published by the node per device, and can be listened to in other Apps for other automation reasons. For example `rssi` readings based on devices.
 - Constantly checks for all installed monitor nodes on the network, to ensure which is online. If any location doesn't respond after a set time `system_timeout`, it sets all entities generated from that location to `0`. This is very useful if for example, a node reported a device confidence of `100`, then it went down. The device will stay at `100` even if the user had left the house, which will lead to wrong state.
 - Reporting of the state of the entire monitor system, including all nodes state to a MQTT topic. The topic is `monitor/state`
@@ -173,7 +174,7 @@ key | optional | type | default | description
 `system_timeout`| True | int | 60 | Time in seconds, for a monitor node not to respond to system check for it to be considered offline.
 `scheduled_restart`| True | dict | | A dictionary specifing the `time` as `str` in `HH:MM:SS` format, first 3 letters of the `days` as a `list` and locations as `list` or `str` the app should restart the nodes on the network. If `remote_monitors` specified and `disabled` is not `True`, it will lead to a reboot of the node's hardware as specified in location. If no location is specified, it will only restart the script.
 `remote_monitors`| True | dict | | The names (locations), login details (`host`, `username` and `password`) optional `reboot_command` which defaults to `sudo reboot now` of the nodes to be rebooted. Also a parameter `auto_reboot_when_offline` can be added, which instructs the app if to reboot the node when offline, and what `time` to be auto rebooted. If `disable` is `True`, the app will not be able to reboot any nodes defined.
-`home_gateway_sensors`| True | list |  | List of gateway sensors, which can be used by the app to instruct the nodes based on their state if to run a arrive/depart scan. If all home, only depart scan is ran. If all away, arrive scan is ran, and if neither both scans are ran.
+`home_gateway_sensors`| True | list |  | List of gateway sensors, which can be used by the app to instruct the nodes based on their state if to run a arrive/depart scan. If all home, only depart scan is ran. If all away, arrive scan is ran, and if neither both scans are ran. This accepts any kind of entity, and not limited to `binary_sensors`
 `home_motion_sensors`| True | list |  | List of motion sensors, which can be used by the app to instruct the nodes based on their state if to run rssi scan.
 `known_devices`| True | list |  | List of known devices that are to be loaded into all the nodes on the network
 `known_beacons`| True | list |  | List of known beacons that data received from them by the app from the nodes, are to be processed by the app
@@ -247,6 +248,13 @@ Used to instruct the app to set all entities in a predefined location to 0, indi
 
 ```python
 self.call_service("monitor/clear_location_entities", location="hallway", namespace=mqtt)
+```
+
+### clean_devices
+Used to instruct the app to clean up old known devices. This is always ran at start-up, so technically should not be a need to be manually ran
+
+```python
+self.call_service("monitor/clean_devices", namespace=mqtt)
 ```
 
 MQTT Commands:

@@ -36,24 +36,19 @@ This App is designed to maximise the use of the detection system, so that the us
 - Use motion sensors to update Received Signal Strength Indication (RSSI) values in the home, so when users move the `nearest_monitor` can be updated
 - Can schedule a restart of the entire Monitor system at a scheduled time during certain days in the week via the `scheduled_restart` configuration
 - Supports the ability to have the node restarted, if the node is reported to be offline. This will only take place if `auto_reboot_when_offline` is `True`
-    
-To use the app, it is required to setup the Monitor system as follows:
---------------------------------------------------------------------------
 
-- Have [Home Assistant](https://www.home-assistant.io/getting-started/) and [Appdaemon](https://appdaemon.readthedocs.io/en/latest/INSTALL.html) >= 4.0 running (of course :roll_eyes:)
-- If AppDaemon is not installed in the PC to run this app, execute in commandline
-    ```
-    bash -c "$(curl -sL https://raw.githubusercontent.com/Odianosen25/Monitor-App/master/installer/install_ad.sh)"
-    ``` 
-    The script will install AppDaemon and this App alongside. Then make the required changes, as required. Please read more about the [AD install script here](https://github.com/Odianosen25/Monitor-App/blob/master/installer/README.md). - contributed by [TheStigh](https://github.com/TheStigh)
-- Make use of the Appdaemon MQTT plugin alongside that of HASS. How to setup the MQTT plugin in AD can be seen via this [link](https://appdaemon.readthedocs.io/en/latest/CONFIGURE.html#configuration-of-the-mqtt-plugin). A simple plugin configuration sufficient for this app, in the `appdaemon.yaml` file is seen below.
+
+Requirements    
+-------------------------------------------------------------------------- 
+- [Home Assistant](https://www.home-assistant.io/getting-started/) 
+- [MQTT Broker](https://www.home-assistant.io/docs/mqtt/broker/) Mosquitto MQTT broker add-on from Add-on-Store works out of the box
+- [Appdaemon](https://appdaemon.readthedocs.io/en/latest/INSTALL.html) >= 4.0 running (of course :roll_eyes:). You can install AppDaemon addon from the Add-on-store. Make sure to also [enable MQTT plugin in Appdaemon](https://appdaemon.readthedocs.io/en/latest/CONFIGURE.html#configuration-of-the-mqtt-plugin). 
+    - A simple AppDaemon plugin configuration sufficient for this app, in the `appdaemon.yaml` file is seen below.
     ```yaml
     plugins:
         HASS:
           type: hass
-          ha_url: <some_url>
-          token: <token>
-          
+         
         MQTT:
            type: mqtt
            namespace: mqtt
@@ -61,9 +56,33 @@ To use the app, it is required to setup the Monitor system as follows:
            client_user: username
            client_password: password
     ```
-- Have at least a single main node, which runs as `monitor.sh -tdr -a -b` in a location that users stay more often in line with @andrewjfreyer example setup. If having more than 1 monitor, have the rest run as `monitor.sh -tad -a -b` so they only scan on trigger for both arrival and departure.
-- In the main node, have good spacing between scans, not only to avoid unnecessarily flooding your environment with scans but also allowing the app to take over scans intermittently. I have mine set at 120 secs throughout for now
-- Have sensors at the entrances into the home which I termed `gateways`, whether it be doors or garages. Windows also for those that use it :wink:
+- [Andrew's Monitor](https://github.com/andrewjfreyer/monitor) running on the network. 
+    - Have at least a single main node, which runs as `monitor.sh -tdr -a -b` in a location that users stay more often in line with @andrewjfreyer example setup. If having more than 1 monitor, have the rest run as `monitor.sh -tad -a -b` so they only scan on trigger for both arrival and departure.
+    - Don't worry about adding known_add `known_static_addresses` or `known_beacon_addresses` as Monitor-App will handle all that for you
+    - In the main node, have good spacing between scans, not only to avoid unnecessarily flooding your environment with scans but also allowing the app to take over scans intermittently. I have mine set at 120 secs throughout for now
+    - Recommended: Have sensors at the entrances into the home which I termed `gateways`, whether it be doors or garages. Windows also for those that use it :wink:
+
+Installation    
+-------------------------------------------------------------------------- 
+- **Install using HACS**: (Easiest Way) by first enabling "Enable AppDaemon apps discovery & tracking" in the HACS options under integration. Then go into HACS > Automation and search for "Monitor-App"
+- **Configure Monitor-App**: HACS will install Monitor-App in /config/Appdaemon/apps/Monitor-App. Rename the `home_presence_app_example.yaml` to `home_presence_app.yaml` (or it will be overwritten during next update). Make your configuration changes. At the very minimum you will need to update the following:
+    - known_devices (these will be synced with all your nodes)
+    - remote_monitors (add your Monitor's address)
+- **Restart AppDaemon to activate Monitor-App**. You can see AppDaemon's logs to see the startup process. NOTE: not all of created Monitor-App sensors (like monitor.xxx) are used in HA so some warnings are ok here.
+    - If everything is working properly you should now see new `binary_sensors` (binary_sensor.monitor_xxxx) show up for each `known_device` that you created.  
+
+
+## Alternative Installation Methods (Without HACS):
+- **Download Repository**: You can simply download the repository and copy the `home_presence_app` folder, and place it into your AD's `apps` folder. Make the required changes in the `home_presence_app.yaml` file, and AD will automatically pickup the app for instanciation.
+- **Use an installation script**:
+    - If AppDaemon is not installed in the PC to run this app, execute in a commandline
+        ```
+        bash -c "$(curl -sL https://raw.githubusercontent.com/Odianosen25/Monitor-App/master/installer/install_ad.sh)"
+        ``` 
+        The script will install AppDaemon and this App alongside. Then make the required changes, as required. Please read more about the [AD install script here](https://github.com/Odianosen25/Monitor-App/blob/master/installer/README.md). - contributed by [TheStigh](https://github.com/TheStigh)
+
+
+
 
 When developing this app, 4 main things were my target:
 -------------------------------------------------------
@@ -270,13 +289,6 @@ This topic is listened to by the app, and when a message is received it will exe
 ### monitor/location/reboot
  This topic is used by the app to reboot a remote monitor node. The `location` parmeter can be a any of the declared nodes in `remote_monitors`. So if wanting to say reboot only the living room's node, simply send an empty payload to `monitor/living_room/reboot`. if the location is `all`, that is an empty payload is sent to `monitor/all/reboot`, this will reboot all the declared remote_monitor nodes.
 
- Installation:
---------------
-
-The app can be installed as a regurlar AppDaemon app, but depending on how AppDaemon is installed the following outlines how the app can be installed:
-- If installing the app on a Linux computer without AppDaemon installed on it, then the easiest way will be using the [installation script](https://github.com/Odianosen25/Monitor-App/tree/master/installer) described above
-- If using Hass.io, the app is available via HACS as a custom repository for now. It is being reviewed to be added as default
-- If running in a non-Hass.io environment, simply run the same script as above, and select the right installation you want. Or simply download the repository and copy the `home_presence_app` folder, and place in your `apps` folder. Make the required changes in the `home_presence_app.yaml` file, and AD will automatically pickup the app for instanciation.
 
 RSSI Tracking:
 --------------

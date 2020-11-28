@@ -258,7 +258,7 @@ class HomePresenceApp(ad.ADBase):
 
         # Presence System is Restarting
         if action == "restart":
-            self.adbase.log("The Entire Presence System is Restarting", level="INFO")
+            self.adbase.log("The Entire Presence System is Restarting")
             return
 
         # Miscellaneous Actions, Discard
@@ -520,6 +520,7 @@ class HomePresenceApp(ad.ADBase):
         # Scan has just finished.
         elif action == "end" and location in locations_attr:
             attributes["locations"].remove(location)
+
         last_one = old_state != new_state and not attributes.get("locations")
 
         self.mqtt.set_state(
@@ -821,32 +822,6 @@ class HomePresenceApp(ad.ADBase):
             )
             self.hass.set_state(sensor, state=new_state, attributes=attributes)
 
-    def gateway_opened(self, entity, attribute, old, new, kwargs):
-        """Respond to a gateway device opening or closing."""
-        self.adbase.log(f"Gateway Sensor {entity} now {new}", level="DEBUG")
-
-        true_states = ("on", "y", "yes", "true", "home", "open", "unlocked", True)
-        false_states = ("off", "n", "no", "false", "away", "closed", "locked", False)
-
-        if new not in (true_states + false_states):
-            return
-
-        if self.gateway_timer is not None:
-            # Cancel Existing Timer
-            self.adbase.cancel_timer(self.gateway_timer)
-            self.gateway_timer = None
-
-        if self.hass.get_state(self.everyone_not_home, copy=False) == "on":
-            # No one at home
-            self.adbase.run_in(self.run_arrive_scan, 0)
-
-        elif self.hass.get_state(self.everyone_home, copy=False) == "on":
-            # everyone at home
-            self.adbase.run_in(self.run_depart_scan, 0)
-        else:
-            self.adbase.run_in(self.run_arrive_scan, 0)
-            self.adbase.run_in(self.run_depart_scan, 0)
-
     def motion_detected(self, entity, attribute, old, new, kwargs):
         """Respond to motion detected somewhere in the house.
 
@@ -866,6 +841,8 @@ class HomePresenceApp(ad.ADBase):
 
     def check_home_state(self, kwargs):
         """Check if a user is home based on multiple locations."""
+
+        self.check_home_timer = None
         check_state = kwargs["check_state"]
         user_res = list(
             map(lambda x: self.hass.get_state(x, copy=False), self.all_users_sensors)
@@ -888,7 +865,6 @@ class HomePresenceApp(ad.ADBase):
         count = self.count_persons_in_home()
         new_attr = {"count": count}
         self.update_hass_sensor(self.somebody_is_home, somebody_home, new_attr=new_attr)
-        self.check_home_timer = None
 
     def reload_device_state(self, kwargs):
         """Get the latest states from the scanners."""
@@ -927,6 +903,69 @@ class HomePresenceApp(ad.ADBase):
             topic = f"{self.presence_topic}/{location}/state"
 
         self.mqtt.mqtt_publish(topic, json.dumps(data))
+
+    def gateway_opened(self, entity, attribute, old, new, kwargs):
+        """Respond to a gateway device opening or closing."""
+        self.adbase.log(f"Gateway Sensor {entity} now {new}", level="DEBUG")
+
+        self.check_and_run_scans(new)
+
+    def gateway_opened_timer(self, kwargs):
+        """Ran at intervals depending on when the user has a gateway opened"""
+
+        self.check_and_run_scans(**kwargs)
+
+    def check_and_run_scans(self, state=None, **kwargs):
+        """Check the state of the home and run the required scans"""
+
+        true_states = ("on", "y", "yes", "true", "home", "open", "unlocked", True)
+        false_states = ("off", "n", "no", "false", "away", "closed", "locked", False)
+
+        if state is None:
+            # none sent, so its a timer and so need to get the data itself, what a drag
+            states = list(
+                map(
+                    lambda x: self.hass.get_state(x, copy=False),
+                    self.args.get("home_gateway_sensors", []),
+                )
+            )
+
+            # now check if any of them is opened
+            for s in states:
+                if s in true_states:
+                    state = s
+                    break
+
+        if state not in (true_states + false_states):
+            return
+
+        if self.gateway_timer is not None:
+            # Cancel Existing Timer
+            self.adbase.cancel_timer(self.gateway_timer)
+            self.gateway_timer = None
+
+        if self.hass.get_state(self.everyone_not_home, copy=False) == "on":
+            # No one at home
+            self.adbase.run_in(self.run_arrive_scan, 0)
+
+        elif self.hass.get_state(self.everyone_home, copy=False) == "on":
+            # everyone at home
+            self.adbase.run_in(self.run_depart_scan, 0)
+
+        else:
+            self.adbase.run_in(self.run_arrive_scan, 0)
+            self.adbase.run_in(self.run_depart_scan, 0)
+
+        # now check if gateway opned and the user had declared a scan interval for gateway opened
+        if state in true_states and self.args.get("gateway_scan_interval"):
+            timer = int(self.args.get("gateway_scan_interval"))
+            first_time = kwargs.get("first_time", True)
+            # there is a scan interval so need to be worked on
+            # but first check if there is an initial one and it hasn't been ran
+            if first_time and self.args.get("gateway_scan_interval_delay"):
+                timer = int(self.args.get("gateway_scan_interval_delay"))
+
+            self.adbase.run_in(self.gateway_opened_timer, timer, first_time=first_time)
 
     def run_arrive_scan(self, kwargs):
         """Request an arrival scan.
@@ -1334,7 +1373,7 @@ class HomePresenceApp(ad.ADBase):
                     payload=device,
                     scan_type="System",
                 )
-                timer += 1
+                timer += 3
 
     def remove_known_device(self, kwargs):
         """Request all known devices in config to be deleted from monitors."""

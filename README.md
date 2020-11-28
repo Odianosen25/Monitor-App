@@ -17,8 +17,9 @@ This App is designed to maximise the use of the detection system, so that the us
     - If wanting to use `device_trackers`, it is possible to config the app to use `device_tracker` instead of `binary_sensors` for each device. The app will update the state as required; that is use `home`/`not_home` instead of `on`/`off`. - contributed by [shbatm](https://github.com/shbatm)
     - Binary sensors for when everyone is in `binary_sensor.everyone_home`, when everyone is out `binary_sensor.everyone_not_home`.     These sensors are set to ON or OFF  depending on declared users in the apps.yaml file users_sensors are in or out. If some are in and some out, both will be OFF, but another sensor `binary_sensor.somebody_is_home` can be used. This is handy for other automation rules.
     - The name of the sensors for `everyone_home`, `everyone_not_home` and `somebody_is_home` can be modified to use other names as required. - contributed by [shbatm](https://github.com/shbatm)
-- If a device is seen to be below the configured minimum confidence minimum_confidence level across all locations which defaults to 50,   a configurable not_home_timeout is ran before declaring the user device is not home in HA using the binary sensor generated for that     device.
-- When one of the declared gateway_sensors in the apps.yaml is opened, based on who is in the house it will send a scan instruction to     the monitor system.
+- If a device is seen to be below the configured minimum confidence minimum_confidence level across all locations which defaults to 50, a configurable not_home_timeout is ran before declaring the user device is not home in HA using the binary sensor generated for that device.
+- When one of the declared gateway_sensors in the apps.yaml is opened, based on who is in the house it will send a scan instruction to the monitor system.
+- When a gateway is opened for a long time, it is possible to set a time interval that instructs the app to carryout scans over a set interval. Useful if living within a space that has one of the gateways opened for a long time
 - Before sending the scan instruction, it first checks for if the system is busy scanning. With the new upgrade to monitor by Andrew, this is not really needed. But (though preferred) if the user was to activate `PREF_MQTT_REPORT_SCAN_MESSAGES` to `true` in preferences, it can still use it
 - If no gateway sensors are specified, it will send scan instructions every 1 minute. This negates the experience for quick detection, so it is highly recommended to make use of at least a single gateway sensor.
 - Ability to define the `known_devices` in a single place within AD, which is then loaded to all monitor nodes on the network. This can be useful, if having multiple nodes, and need to manage all `known_devices` from a single place, instead of having to change it in all nodes individually.
@@ -108,6 +109,9 @@ home_presence_app:
   system_timeout: 60
   home_gateway_sensors:
     - binary_sensor.main_door_contact
+
+  gateway_scan_interval_delay: 180 # wait for 3 minutes
+  gateway_scan_interval: 60 # if after 3 minutes gateway still opended, scan every 1 minute
   
   # reboot the all nodes at 12 midnight on Mondays and Thursdays
   scheduled_restart:
@@ -175,6 +179,8 @@ key | optional | type | default | description
 `scheduled_restart`| True | dict | | A dictionary specifing the `time` as `str` in `HH:MM:SS` format, first 3 letters of the `days` as a `list` and locations as `list` or `str` the app should restart the nodes on the network. If `remote_monitors` specified and `disabled` is not `True`, it will lead to a reboot of the node's hardware as specified in location. If no location is specified, it will only restart the script.
 `remote_monitors`| True | dict | | The names (locations), login details (`host`, `username` and `password`) optional `reboot_command` which defaults to `sudo reboot now` of the nodes to be rebooted. Also a parameter `auto_reboot_when_offline` can be added, which instructs the app if to reboot the node when offline, and what `time` to be auto rebooted. If `disable` is `True`, the app will not be able to reboot any nodes defined.
 `home_gateway_sensors`| True | list |  | List of gateway sensors, which can be used by the app to instruct the nodes based on their state if to run a arrive/depart scan. If all home, only depart scan is ran. If all away, arrive scan is ran, and if neither both scans are ran. This accepts any kind of entity, and not limited to `binary_sensors`
+`gateway_scan_interval_delay`| None | int |  | If the app is set to scan continously over a given time if any of the gateways are opened, this is used to set the time in seconds for it to wait, before carrying out the scans
+`gateway_scan_interval`| None | int |  | This is used to instruct the app to keep running scans, while a gateway is opened. This can be useful if living in a space that keeps the door or something opened for a long time
 `home_motion_sensors`| True | list |  | List of motion sensors, which can be used by the app to instruct the nodes based on their state if to run rssi scan.
 `known_devices`| True | list |  | List of known devices that are to be loaded into all the nodes on the network
 `known_beacons`| True | list |  | List of known beacons that data received from them by the app from the nodes, are to be processed by the app

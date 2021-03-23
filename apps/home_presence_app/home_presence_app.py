@@ -175,6 +175,9 @@ class HomePresenceApp(ad.ADBase):
                 level="WARNING",
             )
 
+        # subscribe to the mqtt topic
+        self.mqtt.mqtt_subscribe(f"{self.presence_topic}/#")
+
         # Setup primary MQTT Listener for all presence messages.
         self.mqtt.listen_event(
             self.presence_message,
@@ -454,14 +457,20 @@ class HomePresenceApp(ad.ADBase):
 
         if payload == "offline":
             # Location Offline, Run Timer to Clear All Entities
-            if location in self.location_timers:
+            if location in self.location_timers and self.adbase.timer_running(
+                self.location_timers[location]
+            ):
                 self.adbase.cancel_timer(self.location_timers[location])
 
             self.location_timers[location] = self.adbase.run_in(
                 self.clear_location_entities, self.system_timeout, location=location
             )
 
-        elif payload == "online" and location in self.location_timers:
+        elif (
+            payload == "online"
+            and location in self.location_timers
+            and self.adbase.timer_running(self.location_timers[location])
+        ):
             # Location back online. Cancel any timers.
             self.adbase.cancel_timer(self.location_timers[location])
 
@@ -536,7 +545,9 @@ class HomePresenceApp(ad.ADBase):
             return
 
         entity_id = f"{self.presence_name}.{location}_state"
-        if location in self.location_timers:
+        if location in self.location_timers and self.adbase.timer_running(
+            self.location_timers[location]
+        ):
             self.adbase.cancel_timer(self.location_timers[location])
 
         self.location_timers[location] = self.adbase.run_in(
@@ -667,7 +678,11 @@ class HomePresenceApp(ad.ADBase):
             list(map(lambda x: int(x) >= self.minimum_conf, sensor_res))
         ):
             # Cancel the running timer.
-            if self.not_home_timers.get(device_entity_id) is not None:
+            if self.not_home_timers.get(
+                device_entity_id
+            ) is not None and self.adbase.timer_running(
+                self.not_home_timers[device_entity_id]
+            ):
                 self.adbase.cancel_timer(self.not_home_timers[device_entity_id])
                 self.not_home_timers[device_entity_id] = None
 
@@ -683,7 +698,9 @@ class HomePresenceApp(ad.ADBase):
 
             if device_state_sensor in self.all_users_sensors:
                 self.update_hass_sensor(self.everyone_not_home, "off")
-                if self.check_home_timer is not None:
+                if self.check_home_timer is not None and self.adbase.timer_running(
+                    self.check_home_timer
+                ):
                     self.adbase.cancel_timer(self.check_home_timer)
 
                 self.check_home_timer = self.adbase.run_in(
@@ -726,7 +743,11 @@ class HomePresenceApp(ad.ADBase):
 
     def not_home_func(self, kwargs):
         """Manage devices that are not home."""
-        device_entity_id = kwargs.get("device_entity_id")
+        device_entity_id = kwargs["device_entity_id"]
+
+        # remove from dictionary
+        self.not_home_timers.pop(device_entity_id, None)
+
         device_state_sensor = f"{self.user_device_domain}.{device_entity_id}"
         device_conf_sensors = self.home_state_entities[device_entity_id]
         sensor_res = list(
@@ -753,7 +774,9 @@ class HomePresenceApp(ad.ADBase):
                 # At least someone not home, set Everyone Home to off
                 self.update_hass_sensor(self.everyone_home, "off")
 
-                if self.check_home_timer is not None:
+                if self.check_home_timer is not None and self.adbase.timer_running(
+                    self.check_home_timer
+                ):
                     self.adbase.cancel_timer(self.check_home_timer)
 
                 self.check_home_timer = self.adbase.run_in(
@@ -829,7 +852,9 @@ class HomePresenceApp(ad.ADBase):
         """
         self.adbase.log(f"Motion Sensor {entity} now {new}", level="DEBUG")
 
-        if self.motion_timer is not None:  # a timer is running already
+        if self.motion_timer is not None and self.adbase.timer_running(
+            self.motion_timer
+        ):  # a timer is running already
             self.adbase.cancel_timer(self.motion_timer)
             self.motion_timer = None
         """ 'duration' parameter could be used in listen_state.
@@ -939,7 +964,9 @@ class HomePresenceApp(ad.ADBase):
         if state not in (true_states + false_states):
             return
 
-        if self.gateway_timer is not None:
+        if self.gateway_timer is not None and self.adbase.timer_running(
+            self.gateway_timer
+        ):
             # Cancel Existing Timer
             self.adbase.cancel_timer(self.gateway_timer)
             self.gateway_timer = None
@@ -964,6 +991,7 @@ class HomePresenceApp(ad.ADBase):
             # but first check if there is an initial one and it hasn't been ran
             if first_time and self.args.get("gateway_scan_interval_delay"):
                 timer = int(self.args.get("gateway_scan_interval_delay"))
+                first_time = False
 
             self.adbase.run_in(self.gateway_opened_timer, timer, first_time=first_time)
 
@@ -1005,7 +1033,9 @@ class HomePresenceApp(ad.ADBase):
         payload = ""
 
         # Cancel any timers
-        if self.gateway_timer is not None:
+        if self.gateway_timer is not None and self.adbase.timer_running(
+            self.gateway_timer
+        ):
             self.adbase.cancel_timer(self.gateway_timer)
 
         # Scan for departure of anyone
@@ -1085,7 +1115,7 @@ class HomePresenceApp(ad.ADBase):
                     node_task = self.node_executing.get(node)
                     if node_task is None or node_task.done() or node_task.cancelled():
                         # meaning its either not running, or had completed or cancelled
-                        self.node_executing[node] = self.AD.executor.submit(
+                        self.node_executing[node] = self.adbase.submit_to_executor(
                             self.restart_hardware, node
                         )
 
@@ -1137,7 +1167,7 @@ class HomePresenceApp(ad.ADBase):
             node_task = self.node_executing.get(node)
             if node_task is None or node_task.done() or node_task.cancelled():
                 # meaning its either not running, or had completed or cancelled
-                self.node_executing[node] = self.AD.executor.submit(
+                self.node_executing[node] = self.adbase.submit_to_executor(
                     self.execute_command, node, cmd
                 )
 
@@ -1219,10 +1249,13 @@ class HomePresenceApp(ad.ADBase):
         down and the confidence is not 0, it doesn't stay that way,
         and therefore lead to false info.
         """
-        location = kwargs.get("location")
+        location = kwargs["location"]
         self.adbase.log(
             "Processing System Unavailable for " + location.replace("_", " ").title()
         )
+
+        # remove the handler from dict
+        self.location_timers.pop(location, None)
 
         for _, entity_list in self.home_state_entities.items():
             for sensor in entity_list:
@@ -1260,7 +1293,11 @@ class HomePresenceApp(ad.ADBase):
         location = self.mqtt.get_state(entity, attribute="location", copy=False)
         node = location.lower().replace(" ", "_")
 
-        if new == "online" and self.node_scheduled_reboot.get(node) is not None:
+        if (
+            new == "online"
+            and self.node_scheduled_reboot.get(node)
+            and self.adbase.timer_running(self.node_scheduled_reboot[node])
+        ):
             # means there was a scheduled reboot for this node, so should be cancelled
             self.adbase.log(
                 f"Cancelling Scheduled Auto Reboot for Node at {location}, as its now back Online"
@@ -1288,7 +1325,11 @@ class HomePresenceApp(ad.ADBase):
                     if self.node_scheduled_reboot.get(node) is not None:
                         # a reboot had been scheduled earlier, so must be cancled and started all over
                         # this should technically not need to run, unless there is a bug somewhere
-                        self.adbase.cancel_timer(self.node_scheduled_reboot[node])
+
+                        if self.adbase.timer_running(self.node_scheduled_reboot[node]):
+                            self.adbase.cancel_timer(self.node_scheduled_reboot[node])
+
+                        self.node_scheduled_reboot[node] = None
 
                     self.adbase.log(
                         f"Scheduling Auto Reboot for Node at {location} as its Offline",

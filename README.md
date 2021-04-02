@@ -43,8 +43,7 @@ Requirements
 -------------------------------------------------------------------------- 
 - [Home Assistant](https://www.home-assistant.io/getting-started/) 
 - [MQTT Broker](https://www.home-assistant.io/docs/mqtt/broker/) Mosquitto MQTT broker add-on from Add-on-Store works out of the box
-- [Appdaemon](https://appdaemon.readthedocs.io/en/latest/INSTALL.html) >= 4.0 running (of course :roll_eyes:). You can install AppDaemon addon from the Add-on-store. Make sure to also [enable MQTT plugin in Appdaemon](https://appdaemon.readthedocs.io/en/latest/CONFIGURE.html#configuration-of-the-mqtt-plugin). 
-    - A simple AppDaemon plugin configuration sufficient for this app, in the `appdaemon.yaml` file is seen below. It is important set the `client_topics` to ``NONE``, if not using the plugin for other app in AppDaemon
+- [Appdaemon](https://appdaemon.readthedocs.io/en/latest/INSTALL.html) >= 4.0 running (of course :roll_eyes:). You can install AppDaemon addon from the Add-on-store. Make sure to also [enable MQTT plugin in Appdaemon](https://appdaemon.readthedocs.io/en/latest/CONFIGURE.html#configuration-of-the-mqtt-plugin). A simple AppDaemon plugin configuration sufficient for this app, in the `appdaemon.yaml` file is seen below. It is important set the `client_topics` to ``NONE``, if not using the plugin for other app in AppDaemon
     ```yaml
     plugins:
         HASS:

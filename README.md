@@ -56,6 +56,8 @@ Requirements
            client_host: Broker IP Address or DNS
            client_user: username
            client_password: password
+           client_topics:
+               - NONE
     ```
 - [Andrew's Monitor](https://github.com/andrewjfreyer/monitor) running on the network. 
     - Have at least a single main node, which runs as `monitor.sh -tdr -a -b` in a location that users stay more often in line with @andrewjfreyer example setup. If having more than 1 monitor, have the rest run as `monitor.sh -tad -a -b` so they only scan on trigger for both arrival and departure.

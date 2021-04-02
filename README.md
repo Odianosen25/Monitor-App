@@ -43,8 +43,7 @@ Requirements
 -------------------------------------------------------------------------- 
 - [Home Assistant](https://www.home-assistant.io/getting-started/) 
 - [MQTT Broker](https://www.home-assistant.io/docs/mqtt/broker/) Mosquitto MQTT broker add-on from Add-on-Store works out of the box
-- [Appdaemon](https://appdaemon.readthedocs.io/en/latest/INSTALL.html) >= 4.0 running (of course :roll_eyes:). You can install AppDaemon addon from the Add-on-store. Make sure to also [enable MQTT plugin in Appdaemon](https://appdaemon.readthedocs.io/en/latest/CONFIGURE.html#configuration-of-the-mqtt-plugin). 
-    - A simple AppDaemon plugin configuration sufficient for this app, in the `appdaemon.yaml` file is seen below.
+- [Appdaemon](https://appdaemon.readthedocs.io/en/latest/INSTALL.html) >= 4.0 running (of course :roll_eyes:). You can install AppDaemon addon from the Add-on-store. Make sure to also [enable MQTT plugin in Appdaemon](https://appdaemon.readthedocs.io/en/latest/CONFIGURE.html#configuration-of-the-mqtt-plugin). A simple AppDaemon plugin configuration sufficient for this app, in the `appdaemon.yaml` file is seen below. It is important set the `client_topics` to ``NONE``, if not using the plugin for other app in AppDaemon
     ```yaml
     plugins:
         HASS:
@@ -56,6 +55,8 @@ Requirements
            client_host: Broker IP Address or DNS
            client_user: username
            client_password: password
+           client_topics:
+               - NONE
     ```
 - [Andrew's Monitor](https://github.com/andrewjfreyer/monitor) running on the network. 
     - Have at least a single main node, which runs as `monitor.sh -tdr -a -b` in a location that users stay more often in line with @andrewjfreyer example setup. If having more than 1 monitor, have the rest run as `monitor.sh -tad -a -b` so they only scan on trigger for both arrival and departure.

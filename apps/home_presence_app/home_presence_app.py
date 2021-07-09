@@ -23,7 +23,7 @@ from datetime import datetime, timedelta
 import traceback
 
 
-__VERSION__ = "2.4.1"
+__VERSION__ = "2.4.2"
 
 # pylint: disable=attribute-defined-outside-init,unused-argument
 class HomePresenceApp(ad.ADBase):
@@ -35,7 +35,7 @@ class HomePresenceApp(ad.ADBase):
         self.hass = self.get_plugin_api("HASS")
         self.mqtt = self.get_plugin_api("MQTT")
 
-        self.presence_topic = self.args.get("monitor_topic", "monitor")
+        self.monitor_topic = self.args.get("monitor_topic", "monitor")
         self.user_device_domain = self.args.get("user_device_domain", "binary_sensor")
 
         # State string to use depends on which domain is in use.
@@ -57,8 +57,8 @@ class HomePresenceApp(ad.ADBase):
         }
 
         # Support nested presence topics (e.g. "hass/monitor")
-        self.topic_level = len(self.presence_topic.split("/"))
-        self.presence_name = self.presence_topic.split("/")[-1]
+        self.topic_level = len(self.monitor_topic.split("/"))
+        self.monitor_name = self.monitor_topic.split("/")[-1]
 
         self.timeout = self.args.get("not_home_timeout", 30)
         self.minimum_conf = self.args.get("minimum_confidence", 50)
@@ -76,7 +76,7 @@ class HomePresenceApp(ad.ADBase):
         self.node_executing = dict()
 
         # Create a sensor to keep track of if the monitor is busy or not.
-        self.monitor_entity = f"{self.presence_name}.monitor_state"
+        self.monitor_entity = f"{self.monitor_name}.monitor_state"
 
         self.mqtt.set_state(
             self.monitor_entity,
@@ -159,7 +159,7 @@ class HomePresenceApp(ad.ADBase):
 
         # Setup the system checks.
         if self.system_timeout > system_check:
-            topic = f"{self.presence_topic}/echo"
+            topic = f"{self.monitor_topic}/echo"
             self.adbase.run_every(
                 self.send_mqtt_message,
                 self.adbase.datetime() + timedelta(seconds=1),
@@ -176,15 +176,15 @@ class HomePresenceApp(ad.ADBase):
             )
 
         # subscribe to the mqtt topic
-        self.mqtt.mqtt_subscribe(f"{self.presence_topic}/#")
+        self.mqtt.mqtt_subscribe(f"{self.monitor_topic}/#")
 
         # Setup primary MQTT Listener for all presence messages.
         self.mqtt.listen_event(
             self.presence_message,
             self.args.get("mqtt_event", "MQTT_MESSAGE"),
-            wildcard=f"{self.presence_topic}/#",
+            wildcard=f"{self.monitor_topic}/#",
         )
-        self.adbase.log(f"Listening on MQTT Topic {self.presence_topic}", level="DEBUG")
+        self.adbase.log(f"Listening on MQTT Topic {self.monitor_topic}", level="DEBUG")
 
         # Listen for any HASS restarts
         self.hass.listen_event(self.hass_restarted, "plugin_restarted")
@@ -244,17 +244,22 @@ class HomePresenceApp(ad.ADBase):
         if action == "run_scan":
             # add scan_delay=0 to ensure its done immediately
             self.mqtt.call_service(
-                f"{self.presence_topic}/run_{payload.lower()}_scan", scan_delay=0
+                f"{self.monitor_topic}/run_{payload.lower()}_scan", scan_delay=0
             )
             return
 
         # Determine which scanner initiated the message
-        location = "unknown"
+        location = None
         if isinstance(payload_json, dict) and "identity" in payload_json:
-            location = payload_json.get("identity", "unknown")
+            location = payload_json.get("identity")
 
         elif len(topic_path) > self.topic_level + 1:
             location = topic_path[self.topic_level]
+
+        if location in (None, "None", ""):
+            # got an invalid location
+            self.adbase.log(f"Got an invalid location {location}, from topic {topic}", level="WARNING")
+            return
 
         location = location.replace(" ", "_").lower()
         location_friendly = location.replace("_", " ").title()
@@ -305,17 +310,17 @@ class HomePresenceApp(ad.ADBase):
         else:
             device_name = device_name.replace(":", "_").replace("-", "_")
 
-        device_entity_id = f"{self.presence_name}_{device_name}"
+        device_entity_id = f"{self.monitor_name}_{device_name}"
         device_state_sensor = f"{self.user_device_domain}.{device_entity_id}"
         device_entity_prefix = f"{device_entity_id}_{location}"
         device_conf_sensor = f"sensor.{device_entity_prefix}_conf"
         device_local = f"{device_name}_{location}"
-        appdaemon_entity = f"{self.presence_name}.{device_local}"
+        appdaemon_entity = f"{self.monitor_name}.{device_local}"
         friendly_name = device_name.strip().replace("_", " ").title()
 
         # RSSI Value for a Known Device:
         if action == "rssi":
-            if topic == f"{self.presence_topic}/scan/rssi" or payload == "":
+            if topic == f"{self.monitor_topic}/scan/rssi" or payload == "":
                 return
 
             attributes = {
@@ -476,7 +481,7 @@ class HomePresenceApp(ad.ADBase):
 
         self.handle_nodes_state(location, payload)
 
-        entity_id = f"{self.presence_name}.{location}_state"
+        entity_id = f"{self.monitor_name}.{location}_state"
         attributes = {}
 
         if (
@@ -544,7 +549,7 @@ class HomePresenceApp(ad.ADBase):
         if payload != "ok":
             return
 
-        entity_id = f"{self.presence_name}.{location}_state"
+        entity_id = f"{self.monitor_name}.{location}_state"
         if location in self.location_timers and self.adbase.timer_running(
             self.location_timers[location]
         ):
@@ -594,7 +599,7 @@ class HomePresenceApp(ad.ADBase):
 
     def update_nearest_monitor(self, device_name):
         """Determine which monitor the device is closest to based on RSSI value."""
-        device_entity_id = f"{self.presence_name}_{device_name}"
+        device_entity_id = f"{self.monitor_name}_{device_name}"
         device_conf_sensors = self.home_state_entities.get(device_entity_id)
         device_state_sensor = f"{self.user_device_domain}.{device_entity_id}"
 
@@ -727,7 +732,7 @@ class HomePresenceApp(ad.ADBase):
         """Used to run RSSI scan in the event the device Left the house and re-entered"""
 
         device_name = kwargs["device_name"]
-        device_entity_id = f"{self.presence_name}_{device_name}"
+        device_entity_id = f"{self.monitor_name}_{device_name}"
         if new == self.state_true:  # device now home
             self.adbase.run_in(self.run_rssi_scan, 0)
 
@@ -737,7 +742,7 @@ class HomePresenceApp(ad.ADBase):
             for sensor in device_conf_sensors:
                 location = self.hass.get_state(sensor, attribute="location", copy=False)
                 device_local = f"{device_name}_{location}"
-                appdaemon_entity = f"{self.presence_name}.{device_local}"
+                appdaemon_entity = f"{self.monitor_name}.{device_local}"
                 self.mqtt.set_state(appdaemon_entity, rssi="unknown")
                 self.update_hass_sensor(sensor, new_attr={"rssi": "unknown"})
 
@@ -893,7 +898,7 @@ class HomePresenceApp(ad.ADBase):
 
     def reload_device_state(self, kwargs):
         """Get the latest states from the scanners."""
-        topic = f"{self.presence_topic}/KNOWN DEVICE STATES"
+        topic = f"{self.monitor_topic}/KNOWN DEVICE STATES"
         self.adbase.run_in(
             self.send_mqtt_message, 0, topic=topic, payload="", scan_type="System"
         )
@@ -921,11 +926,11 @@ class HomePresenceApp(ad.ADBase):
         data.update({"last_changed": last_changed, "state": state})
 
         if "location" not in data:  # it belongs to the overall monitor system
-            topic = f"{self.presence_topic}/state"
+            topic = f"{self.monitor_topic}/state"
 
         else:  # it belongs to a node
             location = data["location"].lower().replace(" ", "_")
-            topic = f"{self.presence_topic}/{location}/state"
+            topic = f"{self.monitor_topic}/{location}/state"
 
         self.mqtt.mqtt_publish(topic, json.dumps(data))
 
@@ -943,7 +948,7 @@ class HomePresenceApp(ad.ADBase):
     def check_and_run_scans(self, state=None, **kwargs):
         """Check the state of the home and run the required scans"""
 
-        true_states = ("on", "y", "yes", "true", "home", "open", "unlocked", True)
+        true_states = ("on", "y", "yes", "true", "home", "opened", "unlocked", True)
         false_states = ("off", "n", "no", "false", "away", "closed", "locked", False)
 
         if state is None:
@@ -1000,7 +1005,7 @@ class HomePresenceApp(ad.ADBase):
 
         Will wait for the scanner to be free and then sends the message.
         """
-        topic = f"{self.presence_topic}/scan/arrive"
+        topic = f"{self.monitor_topic}/scan/arrive"
         payload = ""
         if self.mqtt.get_state(self.monitor_entity, copy=False) == "idle":
             self.mqtt.mqtt_publish(topic, payload)
@@ -1029,7 +1034,7 @@ class HomePresenceApp(ad.ADBase):
         delay = kwargs.get("scan_delay", self.depart_check_time)
         count = kwargs.get("count", 1)
 
-        topic = f"{self.presence_topic}/scan/depart"
+        topic = f"{self.monitor_topic}/scan/depart"
         payload = ""
 
         # Cancel any timers
@@ -1050,14 +1055,14 @@ class HomePresenceApp(ad.ADBase):
 
     def run_rssi_scan(self, kwargs):
         """Send a RSSI Scan Request."""
-        topic = f"{self.presence_topic}/scan/rssi"
+        topic = f"{self.monitor_topic}/scan/rssi"
         payload = ""
         self.mqtt.mqtt_publish(topic, payload)
         self.motion_timer = None
 
     def restart_device(self, kwargs):
         """Send a restart command to the monitor services."""
-        topic = f"{self.presence_topic}/scan/restart"
+        topic = f"{self.monitor_topic}/scan/restart"
         payload = ""
 
         location = kwargs.get("location")  # meaning it needs a device to reboot
@@ -1090,7 +1095,7 @@ class HomePresenceApp(ad.ADBase):
 
             for location in locations:
                 node = location.lower().strip().replace(" ", "_")
-                entity_id = f"{self.presence_name}.{node}_state"
+                entity_id = f"{self.monitor_name}.{node}_state"
 
                 if node not in self.args["remote_monitors"]:
                     self.adbase.log(
@@ -1195,7 +1200,7 @@ class HomePresenceApp(ad.ADBase):
                 level="DEBUG",
             )
 
-            entity_id = f"{self.presence_name}.{node}_state"
+            entity_id = f"{self.monitor_name}.{node}_state"
             self.mqtt.set_state(
                 entity_id,
                 last_rebooted=self.adbase.datetime().replace(microsecond=0).isoformat(),
@@ -1271,7 +1276,7 @@ class HomePresenceApp(ad.ADBase):
         if location in self.location_timers:
             self.location_timers.pop(location)
 
-        entity_id = f"{self.presence_name}.{location}_state"
+        entity_id = f"{self.monitor_name}.{location}_state"
         self.mqtt.set_state(entity_id, state="offline")
 
         self.handle_nodes_state(location, "offline")
@@ -1280,10 +1285,10 @@ class HomePresenceApp(ad.ADBase):
         """used to convert HASS confidence sensor to AD's"""
 
         device_entity_prefix = sensor.replace(
-            f"sensor.{self.presence_name}_", ""
+            f"sensor.{self.monitor_name}_", ""
         ).replace("_conf", "")
 
-        appdaemon_conf_sensor = f"{self.presence_name}.{device_entity_prefix}"
+        appdaemon_conf_sensor = f"{self.monitor_name}.{device_entity_prefix}"
 
         return appdaemon_conf_sensor
 
@@ -1410,7 +1415,7 @@ class HomePresenceApp(ad.ADBase):
                 self.adbase.run_in(
                     self.send_mqtt_message,
                     timer,
-                    topic=f"{self.presence_topic}/setup/ADD STATIC DEVICE",
+                    topic=f"{self.monitor_topic}/setup/ADD STATIC DEVICE",
                     payload=device,
                     scan_type="System",
                 )
@@ -1426,14 +1431,14 @@ class HomePresenceApp(ad.ADBase):
         self.adbase.run_in(
             self.send_mqtt_message,
             0,
-            topic=f"{self.presence_topic}/setup/DELETE STATIC DEVICE",
+            topic=f"{self.monitor_topic}/setup/DELETE STATIC DEVICE",
             payload=device,
             scan_type="System",
         )
 
         # now remove the device from AD
         entities = list(
-            self.mqtt.get_state(f"{self.presence_name}", copy=False, default={}).keys()
+            self.mqtt.get_state(f"{self.monitor_name}", copy=False, default={}).keys()
         )
         device_name = None
         for entity in entities:
@@ -1460,7 +1465,7 @@ class HomePresenceApp(ad.ADBase):
                 self.hass.remove_entity(entity)
 
         if device_name is not None:
-            device_entity_id = f"{self.presence_name}_{device_name}"
+            device_entity_id = f"{self.monitor_name}_{device_name}"
             device_state_sensor = f"{self.user_device_domain}.{device_entity_id}"
 
             if device_entity_id in self.home_state_entities:
@@ -1483,7 +1488,7 @@ class HomePresenceApp(ad.ADBase):
         removed = []
         known_device_names = [n.lower() for n in list(self.known_devices.values())]
 
-        for sensor in self.mqtt.get_state(self.presence_topic, copy=False, default={}):
+        for sensor in self.mqtt.get_state(self.monitor_topic, copy=False, default={}):
             mac_id = self.mqtt.get_state(sensor, attribute="id", copy=False)
             if mac_id is None:
                 continue
@@ -1549,34 +1554,34 @@ class HomePresenceApp(ad.ADBase):
     def setup_service(self):  # rgister services
         """Register services for app"""
         self.mqtt.register_service(
-            f"{self.presence_name}/remove_known_device", self.presense_services
+            f"{self.monitor_name}/remove_known_device", self.presense_services
         )
         self.mqtt.register_service(
-            f"{self.presence_name}/run_arrive_scan", self.presense_services
+            f"{self.monitor_name}/run_arrive_scan", self.presense_services
         )
         self.mqtt.register_service(
-            f"{self.presence_name}/run_depart_scan", self.presense_services
+            f"{self.monitor_name}/run_depart_scan", self.presense_services
         )
         self.mqtt.register_service(
-            f"{self.presence_name}/run_rssi_scan", self.presense_services
+            f"{self.monitor_name}/run_rssi_scan", self.presense_services
         )
         self.mqtt.register_service(
-            f"{self.presence_name}/run_node_command", self.presense_services
+            f"{self.monitor_name}/run_node_command", self.presense_services
         )
         self.mqtt.register_service(
-            f"{self.presence_name}/restart_device", self.presense_services
+            f"{self.monitor_name}/restart_device", self.presense_services
         )
         self.mqtt.register_service(
-            f"{self.presence_name}/reload_device_state", self.presense_services
+            f"{self.monitor_name}/reload_device_state", self.presense_services
         )
         self.mqtt.register_service(
-            f"{self.presence_name}/load_known_devices", self.presense_services
+            f"{self.monitor_name}/load_known_devices", self.presense_services
         )
         self.mqtt.register_service(
-            f"{self.presence_name}/clear_location_entities", self.presense_services
+            f"{self.monitor_name}/clear_location_entities", self.presense_services
         )
         self.mqtt.register_service(
-            f"{self.presence_name}/clean_devices", self.presense_services
+            f"{self.monitor_name}/clean_devices", self.presense_services
         )
 
     def presense_services(self, namespace, domain, service, kwargs):

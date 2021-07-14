@@ -21,6 +21,7 @@ import adbase as ad
 import copy
 from datetime import datetime, timedelta
 import traceback
+import re
 
 
 __VERSION__ = "2.4.2"
@@ -66,7 +67,7 @@ class HomePresenceApp(ad.ADBase):
         self.system_timeout = self.args.get("system_timeout", 60)
         system_check = self.args.get("system_check", 30)
 
-        self.all_users_sensors = []
+        self.all_users_sensors = list()
         self.not_home_timers = dict()
         self.location_timers = dict()
         self.confidence_handlers = dict()
@@ -74,6 +75,7 @@ class HomePresenceApp(ad.ADBase):
         self.system_handle = dict()
         self.node_scheduled_reboot = dict()
         self.node_executing = dict()
+        self.locations = set()
 
         # Create a sensor to keep track of if the monitor is busy or not.
         self.monitor_entity = f"{self.monitor_name}.monitor_state"
@@ -193,6 +195,11 @@ class HomePresenceApp(ad.ADBase):
         self.adbase.run_in(self.clean_devices, 0)  # clean old devices first
         self.setup_service()  # setup service
 
+        # now this is to be ran, every hour to clean strayed location data
+        self.adbase.run_every(
+            self.run_location_clean, f"now+{self.system_timeout + 30}", 3600
+        )
+
     def setup_global_sensors(self):
         """Add all global home/not_home sensors."""
         everyone_not_home = self.args.get("everyone_not_home", "everyone_not_home")
@@ -258,7 +265,10 @@ class HomePresenceApp(ad.ADBase):
 
         if location in (None, "None", ""):
             # got an invalid location
-            self.adbase.log(f"Got an invalid location {location}, from topic {topic}", level="WARNING")
+            self.adbase.log(
+                f"Got an invalid location {location}, from topic {topic}",
+                level="WARNING",
+            )
             return
 
         location = location.replace(" ", "_").lower()
@@ -317,6 +327,9 @@ class HomePresenceApp(ad.ADBase):
         device_local = f"{device_name}_{location}"
         appdaemon_entity = f"{self.monitor_name}.{device_local}"
         friendly_name = device_name.strip().replace("_", " ").title()
+
+        # store the location
+        self.locations.add(location)
 
         # RSSI Value for a Known Device:
         if action == "rssi":
@@ -1246,6 +1259,21 @@ class HomePresenceApp(ad.ADBase):
         self.node_executing[node] = None
         return completed
 
+    def run_location_clean(self, kwargs):
+        """Check for if any location has data that had not been properly cleaned
+        and carry out some cleaning"""
+
+        # first get all sensors, and lets start from there
+        monitor_sensors = list(self.mqtt.get_state(self.monitor_name).keys())
+
+        # next we go via the location data, and see if any location needs cleaning
+        for sensor in monitor_sensors:
+            sens = list(filter(lambda l: re.search(l, sensor), self.locations))
+            if len(sens) == 0:
+                # it means this sensor doesn't belong to a valid location
+                # so it needs to be removed
+                self.mqtt.remove_entity(sensor)
+
     def clear_location_entities(self, kwargs):
         """Clear sensors from an offline location.
 
@@ -1280,6 +1308,9 @@ class HomePresenceApp(ad.ADBase):
         self.mqtt.set_state(entity_id, state="offline")
 
         self.handle_nodes_state(location, "offline")
+
+        if location in self.locations:
+            self.locations.remove(location)
 
     def hass_conf_sensor_to_appdaemon_conf(self, sensor):
         """used to convert HASS confidence sensor to AD's"""

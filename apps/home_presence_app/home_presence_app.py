@@ -1268,10 +1268,14 @@ class HomePresenceApp(ad.ADBase):
 
         # next we go via the location data, and see if any location needs cleaning
         for sensor in monitor_sensors:
+            if sensor == self.monitor_entity:
+                continue
+                
             sens = list(filter(lambda l: re.search(l, sensor), self.locations))
             if len(sens) == 0:
                 # it means this sensor doesn't belong to a valid location
                 # so it needs to be removed
+                self.adbase.log(f"Removing sensor {sensor}", level="WARNING")
                 self.mqtt.remove_entity(sensor)
 
     def clear_location_entities(self, kwargs):

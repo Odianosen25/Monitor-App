@@ -19,6 +19,7 @@ home_presence_app:
   home_gateway_sensors:
     - binary_sensor.main_door_contact
     - cover.garage
+    - zigbee2mqtt.contact.kithen_window
   
   # reboot the all nodes at 12 midnight on Mondays and Thursdays
   scheduled_restart:
@@ -36,7 +37,7 @@ home_presence_app:
     # - kitchen
 
   home_motion_sensors:
-    - binary_sensor.living_room_motion_sensor_occupancy
+    - zigbee2mqtt.occupancy.living_room_motion_sensor_occupancy
     - binary_sensor.kitchen_motion_sensor_occupancy
     - binary_sensor.hallway_motion_sensor_occupancy
     

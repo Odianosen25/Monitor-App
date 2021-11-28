@@ -62,6 +62,7 @@ Requirements
     - Have at least a single main node, which runs as `monitor.sh -tdr -a -b` in a location that users stay more often in line with @andrewjfreyer example setup. If having more than 1 monitor, have the rest run as `monitor.sh -tad -a -b` so they only scan on trigger for both arrival and departure.
     - Don't worry about adding known_add `known_static_addresses` or `known_beacon_addresses` as Monitor-App will handle all that for you
     - In the main node, have good spacing between scans, not only to avoid unnecessarily flooding your environment with scans but also allowing the app to take over scans intermittently. I have mine set at 120 secs throughout for now
+    - Do not use special characters, when specifying the location name of the monitor nodes. This can make the app behave strangely and not manage your entities properly
     - Recommended: Have sensors at the entrances into the home which I termed `gateways`, whether it be doors or garages. Windows also for those that use it :wink:
 
 Installation    
@@ -129,6 +130,7 @@ home_presence_app:
   system_timeout: 60
   home_gateway_sensors:
     - binary_sensor.main_door_contact
+    - zigbee2mqtt.contact.window_sensor
 
   gateway_scan_interval_delay: 180 # wait for 3 minutes
   gateway_scan_interval: 60 # if after 3 minutes gateway still opended, scan every 1 minute
@@ -198,10 +200,10 @@ key | optional | type | default | description
 `system_timeout`| True | int | 60 | Time in seconds, for a monitor node not to respond to system check for it to be considered offline.
 `scheduled_restart`| True | dict | | A dictionary specifing the `time` as `str` in `HH:MM:SS` format, first 3 letters of the `days` as a `list` and locations as `list` or `str` the app should restart the nodes on the network. If `remote_monitors` specified and `disabled` is not `True`, it will lead to a reboot of the node's hardware as specified in location. If no location is specified, it will only restart the script.
 `remote_monitors`| True | dict | | The names (locations), login details (`host`, `username` and `password`) optional `reboot_command` which defaults to `sudo reboot now` of the nodes to be rebooted. Also a parameter `auto_reboot_when_offline` can be added, which instructs the app if to reboot the node when offline, and what `time` to be auto rebooted. If `disable` is `True`, the app will not be able to reboot any nodes defined.
-`home_gateway_sensors`| True | list |  | List of gateway sensors, which can be used by the app to instruct the nodes based on their state if to run a arrive/depart scan. If all home, only depart scan is ran. If all away, arrive scan is ran, and if neither both scans are ran. This accepts any kind of entity, and not limited to `binary_sensors`
+`home_gateway_sensors`| True | list |  | List of gateway sensors, which can be used by the app to instruct the nodes based on their state if to run a arrive/depart scan. If all home, only depart scan is ran. If all away, arrive scan is ran, and if neither both scans are ran. This accepts any kind of entity, and not limited to only `binary_sensors`. If the entities exists in the different namespace than `HASS`, its simple to access the entity by specifying the namespace as part of the entity e.g. `zigbee.contact.main_door`.
 `gateway_scan_interval_delay`| None | int |  | If the app is set to scan continously over a given time if any of the gateways are opened, this is used to set the time in seconds for it to wait, before carrying out the scans
 `gateway_scan_interval`| None | int |  | This is used to instruct the app to keep running scans, while a gateway is opened. This can be useful if living in a space that keeps the door or something opened for a long time
-`home_motion_sensors`| True | list |  | List of motion sensors, which can be used by the app to instruct the nodes based on their state if to run rssi scan.
+`home_motion_sensors`| True | list |  | List of motion sensors, which can be used by the app to instruct the nodes based on their state if to run rssi scan. If the entities exists in the different namespace than `HASS`, its simple to access the entity by specifying the namespace as part of the entity e.g. `zigbee.motion.main_door`.
 `known_devices`| True | list |  | List of known devices that are to be loaded into all the nodes on the network
 `known_beacons`| True | list |  | List of known beacons that data received from them by the app from the nodes, are to be processed by the app
 `log_level` | True | `'INFO'` &#124; `'DEBUG'` | `'INFO'` | Switches log level.
